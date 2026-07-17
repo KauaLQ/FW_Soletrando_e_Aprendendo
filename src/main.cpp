@@ -33,8 +33,12 @@ const char* WS_PATH       = "/";
 #define FILA_TAMANHO 40
 #define MAX_ENVIOS_POR_ITERACAO 2
 
-// Nível sempre usado ao pedir palavra (conforme pedido: fixo no menor nível)
-#define NIVEL_PALAVRA 1
+// ---------- Progressão de níveis ----------
+// Começa em 1, sobe a cada acerto, reseta para 1 se errar OU se acertar
+// no nível máximo (fecha o ciclo e recomeça do 1).
+#define NIVEL_INICIAL 1
+#define NIVEL_MAXIMO  3
+int nivelAtual = NIVEL_INICIAL;
 
 typedef struct {
   int16_t dados[CHUNK_AMOSTRAS];
@@ -151,8 +155,8 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
         case AGUARDANDO_RESPOSTA_PALAVRA:
           palavraAtual = resposta;
           Serial.println("=================================");
-          Serial.printf("[JOGO] Palavra para soletrar: %s\n", palavraAtual.c_str());
-          Serial.println("[JOGO] Pode apertar o botao de GRAVAR (IO35)");
+          Serial.printf("[JOGO] Nivel %d | Palavra para soletrar: %s\n", nivelAtual, palavraAtual.c_str());
+          Serial.println("[JOGO] Aperte o botao de GRAVAR (IO35)");
           Serial.println("=================================");
           estado = PALAVRA_PRONTA;
           break;
@@ -161,16 +165,24 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
           Serial.printf("[JOGO] Resultado do backend: %s\n", resposta.c_str());
           if (resposta == palavraAtual) {
             Serial.println("[JOGO] Acertou!");
+            if (nivelAtual >= NIVEL_MAXIMO) {
+              // fechou o ciclo: acertou no nível máximo -> recomeça do 1
+              Serial.println("[JOGO] Nivel maximo concluido! Reiniciando para o nivel 1.");
+              nivelAtual = NIVEL_INICIAL;
+            } else {
+              nivelAtual++;
+              Serial.printf("[JOGO] Subindo para o nivel %d\n", nivelAtual);
+            }
           } else {
-            Serial.println("[JOGO] Nao bateu com a palavra esperada.");
+            Serial.println("[JOGO] Nao bateu com a palavra esperada. Reiniciando para o nivel 1.");
+            nivelAtual = NIVEL_INICIAL;
           }
           Serial.println("[JOGO] Aperte IO34 para pedir a proxima palavra");
           estado = AGUARDANDO_PEDIDO_PALAVRA;
           break;
 
         default:
-          Serial.printf("[WS] Resposta inesperada (estado atual nao esperava texto): %s\n",
-                        resposta.c_str());
+          Serial.printf("[WS] Resposta inesperada (estado atual nao esperava texto): %s\n", resposta.c_str());
           break;
       }
       break;
@@ -195,8 +207,8 @@ void tratarBotaoPalavra() {
       if (estadoConfirmadoPalavra == LOW) {
         // só permite pedir palavra nova se não estivermos no meio de uma gravação ou já esperando resposta
         if (estado == AGUARDANDO_PEDIDO_PALAVRA) {
-          Serial.printf("[BOTAO] Pedindo palavra (nivel %d)...\n", NIVEL_PALAVRA);
-          webSocket.sendTXT(("pedir_palavra " + String(NIVEL_PALAVRA)).c_str());
+          Serial.printf("[BOTAO] Pedindo palavra (nivel %d)...\n", nivelAtual);
+          webSocket.sendTXT(("pedir_palavra " + String(nivelAtual)).c_str());
           estado = AGUARDANDO_RESPOSTA_PALAVRA;
         } else {
           Serial.println("[AVISO] Ainda nao e possivel pedir nova palavra agora.");
