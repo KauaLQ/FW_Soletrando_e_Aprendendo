@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WebSocketsClient.h>
+#include <Adafruit_SSD1306.h>
+#include "img.h"
 #include <driver/i2s.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -12,6 +14,12 @@ const char* WIFI_PASSWORD = "12345678";
 const char* WS_HOST       = "192.168.1.101"; // IP do PC rodando backend.py
 const uint16_t WS_PORT    = 8080;
 const char* WS_PATH       = "/";
+
+// ---------- Display OLED ----------
+#define LARGURA_TELA 128 
+#define ALTURA_TELA 64
+// Declara o objeto do display (-1 significa que o display não tem pino de RESET)
+Adafruit_SSD1306 display(LARGURA_TELA, ALTURA_TELA, &Wire, -1);
 
 // ---------- Pinos do INMP441 (I2S) ----------
 #define I2S_WS_PIN   25
@@ -143,10 +151,20 @@ void tarefaCapturaAudio(void *parametro) {
 void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
   switch (type) {
     case WStype_CONNECTED:
-      Serial.println("[WS] Conectado ao backend");
+      display.clearDisplay();
+      display.setCursor(0, 0);
+      display.print("Conectado ao backend");
+      display.setCursor(0, 10);
+      display.drawFastHLine(0, 10, LARGURA_TELA, SSD1306_WHITE);
+      display.display();
       break;
     case WStype_DISCONNECTED:
-      Serial.println("[WS] Desconectado do backend");
+      display.clearDisplay();
+      display.setCursor(0, 0);
+      display.print("Aguardando backend");
+      display.setCursor(0, 10);
+      display.drawFastHLine(0, 10, LARGURA_TELA, SSD1306_WHITE);
+      display.display();
       break;
     case WStype_TEXT: {
       String resposta = String((char*)payload).substring(0, length);
@@ -154,35 +172,74 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
       switch (estado) {
         case AGUARDANDO_RESPOSTA_PALAVRA:
           palavraAtual = resposta;
-          Serial.println("=================================");
-          Serial.printf("[JOGO] Nivel %d | Palavra para soletrar: %s\n", nivelAtual, palavraAtual.c_str());
-          Serial.println("[JOGO] Aperte o botao de GRAVAR (IO35)");
-          Serial.println("=================================");
+          display.fillRect(0, 0, LARGURA_TELA, 10, SSD1306_BLACK); // Limpa a linha de status
+          display.fillRect(0, 15, LARGURA_TELA, 20, SSD1306_BLACK); // Limpa a linha da palavra
+          display.setCursor(0, 0);
+          display.printf("Nivel %d", nivelAtual);
+          display.setTextSize(2);
+          display.setCursor(0, 15);
+          display.printf("%s", palavraAtual.c_str());
+          display.setTextSize(1);
+          display.drawFastHLine(0, 35, LARGURA_TELA, SSD1306_WHITE);
+          display.fillRect(0, 40, LARGURA_TELA, 24, SSD1306_BLACK); // Limpa a linha de instrução
+          display.setCursor(0, 40);
+          display.print("Segure B para gravar");
+          display.display();
           estado = PALAVRA_PRONTA;
           break;
 
         case AGUARDANDO_RESULTADO:
-          Serial.printf("[JOGO] Resultado do backend: %s\n", resposta.c_str());
+          // Debug: mostra a resposta do backend no console. Descomente caso necessário.
+          // Serial.printf("[JOGO] Resultado do backend: %s\n", resposta.c_str());
           if (resposta == palavraAtual) {
-            Serial.println("[JOGO] Acertou!");
+            display.fillRect(0, 15, LARGURA_TELA, 20, SSD1306_BLACK); // Limpa a linha da palavra
+            display.setTextSize(2);
+            display.setCursor(0, 15);
+            display.printf("Acertou!");
+            display.setTextSize(1);
+            display.display();
             if (nivelAtual >= NIVEL_MAXIMO) {
               // fechou o ciclo: acertou no nível máximo -> recomeça do 1
-              Serial.println("[JOGO] Nivel maximo concluido! Reiniciando para o nivel 1.");
+              display.fillRect(0, 0, LARGURA_TELA, 10, SSD1306_BLACK); // Limpa a linha de status
+              display.setCursor(0, 0);
+              display.print("Jogo concluido!");
+              display.display();
               nivelAtual = NIVEL_INICIAL;
             } else {
               nivelAtual++;
-              Serial.printf("[JOGO] Subindo para o nivel %d\n", nivelAtual);
+              display.fillRect(0, 0, LARGURA_TELA, 10, SSD1306_BLACK); // Limpa a linha de status
+              display.setCursor(0, 0);
+              display.printf("Proximo nivel: %d", nivelAtual);
+              display.display();
             }
           } else {
-            Serial.println("[JOGO] Nao bateu com a palavra esperada. Reiniciando para o nivel 1.");
+            display.fillRect(0, 0, LARGURA_TELA, 10, SSD1306_BLACK); // Limpa a linha de status
+            display.fillRect(0, 15, LARGURA_TELA, 20, SSD1306_BLACK); // Limpa a linha da palavra
+            display.setCursor(0, 0);
+            display.print("Nivel resetado");
+            display.setCursor(0, 15);
+            display.printf("Palavra: %s", palavraAtual.c_str());
+            display.setCursor(0, 25);
+            display.printf("Resposta: %s", resposta.c_str());
+            display.display();
             nivelAtual = NIVEL_INICIAL;
           }
-          Serial.println("[JOGO] Aperte IO34 para pedir a proxima palavra");
+          display.fillRect(0, 40, LARGURA_TELA, 24, SSD1306_BLACK); // Limpa a linha de instrução
+          display.setCursor(0, 40);
+          display.print("Aperte A para pedir");
+          display.display();
           estado = AGUARDANDO_PEDIDO_PALAVRA;
           break;
 
         default:
-          Serial.printf("[WS] Resposta inesperada (estado atual nao esperava texto): %s\n", resposta.c_str());
+          display.fillRect(0, 15, LARGURA_TELA, 20, SSD1306_BLACK); // Limpa a linha da palavra
+          display.setTextSize(2);
+          display.setCursor(0, 15);
+          display.printf("ERRO");
+          display.setTextSize(1);
+          display.display();
+          // Debug: mostra a resposta do backend no console. Descomente caso necessário.
+          // Serial.printf("[WS] Resposta inesperada (estado atual nao esperava texto): %s\n", resposta.c_str());
           break;
       }
       break;
@@ -207,11 +264,16 @@ void tratarBotaoPalavra() {
       if (estadoConfirmadoPalavra == LOW) {
         // só permite pedir palavra nova se não estivermos no meio de uma gravação ou já esperando resposta
         if (estado == AGUARDANDO_PEDIDO_PALAVRA) {
-          Serial.printf("[BOTAO] Pedindo palavra (nivel %d)...\n", nivelAtual);
+          // Serial.printf("[BOTAO] Pedindo palavra (nivel %d)...\n", nivelAtual);
           webSocket.sendTXT(("pedir_palavra " + String(nivelAtual)).c_str());
           estado = AGUARDANDO_RESPOSTA_PALAVRA;
         } else {
-          Serial.println("[AVISO] Ainda nao e possivel pedir nova palavra agora.");
+          display.fillRect(0, 40, LARGURA_TELA, 24, SSD1306_BLACK); // Limpa a linha de instrução
+          display.setCursor(0, 40);
+          display.print("Botao indisponivel");
+          display.setCursor(0, 50);
+          display.print("Segure B para gravar");
+          display.display();
         }
       }
     }
@@ -234,21 +296,36 @@ void tratarBotaoGravar() {
       if (estadoConfirmadoGravar == LOW) { // Acabou de PRESSIONAR o botão (Transição para LOW)
         if (!gravando) {
           if (estado != PALAVRA_PRONTA) {
-            Serial.println("[AVISO] Peca uma palavra primeiro (botao IO34) antes de gravar.");
+            display.fillRect(0, 40, LARGURA_TELA, 24, SSD1306_BLACK); // Limpa a linha de instrução
+            display.setCursor(0, 40);
+            display.print("Botao indisponivel");
+            display.setCursor(0, 50);
+            display.print("Aperte A para pedir");
+            display.display();
           } else {
             diagMin = INT32_MAX;
             diagMax = INT32_MIN;
             xQueueReset(filaAudio);
             gravando = true;
             estado = GRAVANDO;
-            Serial.println("[BOTAO] Gravacao iniciada");
+            display.fillRect(0, 40, LARGURA_TELA, 24, SSD1306_BLACK); // Limpa a linha de instrução
+            display.setCursor(0, 40);
+            display.print("Gravando: Solte B");
+            display.setCursor(0, 50);
+            display.print("para finalizar");
+            display.display();
             webSocket.sendTXT("start_audio");
           }
         }
       } else if (estadoConfirmadoGravar == HIGH) { // Acabou de SOLTAR o botão (Transição para HIGH)
         if (gravando) {
           gravando = false;
-          Serial.println("[BOTAO] Gravacao finalizada, enviando stop_audio");
+          display.fillRect(0, 40, LARGURA_TELA, 24, SSD1306_BLACK); // Limpa a linha de instrução
+          display.setCursor(0, 40);
+          display.print("Gravacao finalizada");
+          display.setCursor(0, 50);
+          display.print("Aguardando resultado");
+          display.display();
 
           ChunkAudio chunk;
           while (xQueueReceive(filaAudio, &chunk, 0) == pdTRUE) {
@@ -257,7 +334,8 @@ void tratarBotaoGravar() {
             }
           }
 
-          Serial.printf("[DIAG] Amplitude bruta (32 bits) observada: min=%ld max=%ld\n", (long)diagMin, (long)diagMax);
+          // Debug: mostra a amplitude bruta observada durante a gravação. Descomente caso necessário.
+          // Serial.printf("[DIAG] Amplitude bruta (32 bits) observada: min=%ld max=%ld\n", (long)diagMin, (long)diagMax);
           webSocket.sendTXT("stop_audio");
           estado = AGUARDANDO_RESULTADO;
         }
@@ -273,15 +351,42 @@ void setup() {
   pinMode(BUTTON_GRAVAR_PIN, INPUT);
   pinMode(BUTTON_PALAVRA_PIN, INPUT);
 
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // Inicializa o display I2C no endereço 0x3C 
+    Serial.println(F("Falha ao inicializar o display SSD1306. Verifique as conexões!"));
+    for(;;); // Trava o programa se houver erro
+  }
+
+  display.clearDisplay();         // Limpa o buffer do display
+  display.setTextColor(WHITE, BLACK);    // Define a cor do texto (Branco)
+  display.drawBitmap(0, 0, bmp_logo_SA, 128, 40, SSD1306_WHITE);
+  display.setTextSize(1);
+  display.setCursor(0, 45);
+  display.print("Conectando WiFi");
+  display.display();              // Atualiza o display com as informações acima
+
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  Serial.print("[WIFI] Conectando");
+  int textPos = 90;
   while (WiFi.status() != WL_CONNECTED) {
     delay(300);
-    Serial.print(".");
+    if (textPos + 5 > 105) {
+      textPos = 90;
+      display.setCursor(textPos, 45);
+      display.print("          "); // Limpa os pontos anteriores
+      display.display();
+    }
+    else {
+      display.setCursor(textPos, 45);
+      display.print(".");
+      display.display();
+      textPos += 5;
+    }
   }
-  Serial.println();
-  Serial.print("[WIFI] Conectado, IP: ");
-  Serial.println(WiFi.localIP());
+  display.fillRect(0, 45, LARGURA_TELA, 10, SSD1306_BLACK); // Limpa a linha de status
+  display.setCursor(0, 45);
+  display.print("Conectado!");
+  display.setCursor(0, 55);
+  display.printf("IP:%s", WiFi.localIP().toString().c_str());
+  display.display();
 
   i2sInstalar();
 
