@@ -2,6 +2,7 @@
 #include <WiFi.h>
 #include <WebSocketsClient.h>
 #include <Adafruit_SSD1306.h>
+#include <MD_Parola.h>
 #include "img.h"
 #include <driver/i2s.h>
 #include <freertos/FreeRTOS.h>
@@ -11,7 +12,7 @@
 // ---------- Configurações de rede ----------
 const char* WIFI_SSID     = "KAUA_LQ";
 const char* WIFI_PASSWORD = "12345678";
-const char* WS_HOST       = "192.168.1.101"; // IP do PC rodando backend.py
+const char* WS_HOST       = "192.168.1.102"; // IP do PC rodando backend.py
 const uint16_t WS_PORT    = 8080;
 const char* WS_PATH       = "/";
 
@@ -20,6 +21,18 @@ const char* WS_PATH       = "/";
 #define ALTURA_TELA 64
 // Declara o objeto do display (-1 significa que o display não tem pino de RESET)
 Adafruit_SSD1306 display(LARGURA_TELA, ALTURA_TELA, &Wire, -1);
+
+// ---------- Configurações da Matriz LED ----------
+#define DATA_PIN  13
+#define CLK_PIN   14
+#define CS_PIN    15
+#define HARDWARE_TYPE MD_MAX72XX::GENERIC_HW
+#define MAX_DEVICES 1
+SPIClass hspi(HSPI);
+MD_Parola matrix = MD_Parola(HARDWARE_TYPE, hspi, CS_PIN, MAX_DEVICES);
+// Controlam o pisca-pisca do número zero na matriz
+unsigned long ultimoPiscaMatriz = 0;
+bool estadoLedPisca = true;
 
 // ---------- Pinos do INMP441 (I2S) ----------
 #define I2S_WS_PIN   25
@@ -62,7 +75,8 @@ WebSocketsClient webSocket;
 enum EstadoJogo {
   AGUARDANDO_PEDIDO_PALAVRA,    // esperando o jogador apertar IO34
   AGUARDANDO_RESPOSTA_PALAVRA,  // já pedimos, esperando o backend responder
-  PALAVRA_PRONTA,               // temos palavra, IO35 liberado pra gravar
+  MEMORIZANDO_PALAVRA,          // palavra na tela, contando tempo pra decorar
+  PALAVRA_PRONTA,               // tempo acabou, IO35 liberado pra gravar
   GRAVANDO,                     // gravando áudio agora
   AGUARDANDO_RESULTADO          // já mandamos stop_audio, esperando feedback
 };
@@ -78,6 +92,24 @@ unsigned long lastDebounceGravarTime = 0;
 volatile bool estadoConfirmadoPalavra = HIGH;
 bool lastPalavraState = HIGH;
 unsigned long lastDebouncePalavraTime = 0;
+
+// ---------- Tempo de memorização por nível (ms) ----------
+#define TEMPO_MEMORIZACAO_NIVEL1 10000
+#define TEMPO_MEMORIZACAO_NIVEL2 5000
+#define TEMPO_MEMORIZACAO_NIVEL3 3000
+
+unsigned long inicioMemorizacao = 0;
+unsigned long duracaoMemorizacao = 0;
+int ultimoSegundoMostrado = -1; // pra só redesenhar quando o segundo mudar
+
+unsigned long obterTempoMemorizacao(int nivel) {
+  switch (nivel) {
+    case 1: return TEMPO_MEMORIZACAO_NIVEL1;
+    case 2: return TEMPO_MEMORIZACAO_NIVEL2;
+    case 3: return TEMPO_MEMORIZACAO_NIVEL3;
+    default: return TEMPO_MEMORIZACAO_NIVEL1;
+  }
+}
 
 // diagnóstico: amplitude mínima/máxima observada durante a gravação atual
 volatile int32_t diagMin = 0;
@@ -183,9 +215,13 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
           display.drawFastHLine(0, 35, LARGURA_TELA, SSD1306_WHITE);
           display.fillRect(0, 40, LARGURA_TELA, 24, SSD1306_BLACK); // Limpa a linha de instrução
           display.setCursor(0, 40);
-          display.print("Segure B para gravar");
+          display.print("Memorize a palavra!");
           display.display();
-          estado = PALAVRA_PRONTA;
+          // Inicia o timer de memorização (não bloqueante)
+          duracaoMemorizacao = obterTempoMemorizacao(nivelAtual);
+          inicioMemorizacao = millis();
+          ultimoSegundoMostrado = -1;
+          estado = MEMORIZANDO_PALAVRA;
           break;
 
         case AGUARDANDO_RESULTADO:
@@ -308,6 +344,7 @@ void tratarBotaoGravar() {
             xQueueReset(filaAudio);
             gravando = true;
             estado = GRAVANDO;
+            matrix.displayClear(); // Apaga a matriz ao pressionar o botão B para gravar
             display.fillRect(0, 40, LARGURA_TELA, 24, SSD1306_BLACK); // Limpa a linha de instrução
             display.setCursor(0, 40);
             display.print("Gravando: Solte B");
@@ -345,11 +382,73 @@ void tratarBotaoGravar() {
   lastGravarState = leitura;
 }
 
+// ---------- Timer de memorização (IO35 continua bloqueado aqui) ----------
+void tratarMemorizacao() {
+  if (estado != MEMORIZANDO_PALAVRA) return;
+
+  unsigned long decorrido = millis() - inicioMemorizacao;
+
+  if (decorrido >= duracaoMemorizacao) {
+    // Tempo acabou: some com a palavra e libera a gravação
+    display.fillRect(0, 15, LARGURA_TELA, 20, SSD1306_BLACK); // apaga a palavra
+    display.setTextSize(2);
+    display.setCursor(0, 15);
+    display.printf("Pronto?");
+    display.setTextSize(1);
+    display.fillRect(0, 40, LARGURA_TELA, 24, SSD1306_BLACK);
+    display.setCursor(0, 40);
+    display.print("Segure B para gravar");
+    display.display();
+    // Configura o estado inicial do pisca-pisca antes de mudar de estado
+    estadoLedPisca = true;
+    ultimoPiscaMatriz = millis();
+    matrix.setTextAlignment(PA_CENTER); // Centraliza o 0 sozinho
+    matrix.print("0");
+    estado = PALAVRA_PRONTA;
+    return;
+  }
+
+  // Atualiza o contador na tela só quando o segundo restante mudar
+  int segundosRestantes = (duracaoMemorizacao - decorrido + 999) / 1000; // arredonda pra cima
+  if (segundosRestantes != ultimoSegundoMostrado) {
+    ultimoSegundoMostrado = segundosRestantes;
+    // Atualiza a matriz de LED com MD_Parola
+    // Centraliza o texto. Se o número for "10", ele vai se ajustar no espaço da matriz.
+    matrix.setTextAlignment(PA_CENTER);
+    matrix.print(String(segundosRestantes));
+  }
+}
+
+void tratarMatrix(){
+  if (estado != PALAVRA_PRONTA) return;
+
+  // Lógica não-bloqueante para piscar a matriz no estado PALAVRA_PRONTA
+  if (estado == PALAVRA_PRONTA) {
+    if (millis() - ultimoPiscaMatriz >= 500) {
+      ultimoPiscaMatriz = millis();
+      estadoLedPisca = !estadoLedPisca;
+      
+      if (estadoLedPisca) {
+        matrix.setTextAlignment(PA_CENTER);
+        matrix.print("0");
+      } else {
+        matrix.displayClear();
+      }
+    }
+  }
+}
+
 // ---------- Setup ----------
 void setup() {
   Serial.begin(115200);
   pinMode(BUTTON_GRAVAR_PIN, INPUT);
   pinMode(BUTTON_PALAVRA_PIN, INPUT);
+
+  // Inicializa o barramento SPI com os pinos customizados do ESP32 (HSPI) e a Matriz LED
+  hspi.begin(CLK_PIN, -1, DATA_PIN, CS_PIN); // SCK, MISO (não usado), MOSI, SS
+  matrix.begin();
+  matrix.setIntensity(1);
+  matrix.displayClear();
 
   if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // Inicializa o display I2C no endereço 0x3C 
     Serial.println(F("Falha ao inicializar o display SSD1306. Verifique as conexões!"));
@@ -404,6 +503,8 @@ void loop() {
   webSocket.loop();
   tratarBotaoPalavra();
   tratarBotaoGravar();
+  tratarMemorizacao();
+  tratarMatrix();
 
   ChunkAudio chunk;
   int enviosNestaIteracao = 0;
