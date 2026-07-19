@@ -5,6 +5,7 @@
 #include <MD_Parola.h>
 #include "img.h"
 #include "modules/buzzer/buzzer.h"
+#include "modules/matrix/matrix.h"
 #include <driver/i2s.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -13,7 +14,7 @@
 // ---------- Configurações de rede ----------
 const char* WIFI_SSID     = "KAUA_LQ";
 const char* WIFI_PASSWORD = "12345678";
-const char* WS_HOST       = "192.168.1.107"; // IP do PC rodando backend.py
+const char* WS_HOST       = "192.168.1.105"; // IP do PC rodando backend.py
 const uint16_t WS_PORT    = 8080;
 const char* WS_PATH       = "/";
 
@@ -102,6 +103,10 @@ unsigned long lastDebouncePalavraTime = 0;
 unsigned long inicioMemorizacao = 0;
 unsigned long duracaoMemorizacao = 0;
 int ultimoSegundoMostrado = -1; // pra só redesenhar quando o segundo mudar
+
+// ---------- Controle não-bloqueante da animação de resultado (acerto/erro) ----------
+#define INTERVALO_FRAME_RESULTADO  150   // velocidade de troca de frames
+unsigned long inicioAnimacaoResultado = 0;
 
 unsigned long obterTempoMemorizacao(int nivel) {
   switch (nivel) {
@@ -193,6 +198,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
       display.display();
       break;
     case WStype_DISCONNECTED:
+      matrixClear(matrix); // Apaga a matriz ao perder a conexão com o backend
       display.clearDisplay();
       display.setCursor(0, 0);
       display.print("Aguardando backend");
@@ -236,6 +242,8 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
             display.printf("Acertou!");
             display.setTextSize(1);
             display.display();
+            matrixStartAnimation(MATRIX_ANIM_CHECK, matrix); // Mostra a animação de acerto
+            inicioAnimacaoResultado = millis();
             if (nivelAtual >= NIVEL_MAXIMO) {
               // fechou o ciclo: acertou no nível máximo -> recomeça do 1
               startBuzzerSong(2);
@@ -264,6 +272,8 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
             display.printf("Resposta: %s", resposta.c_str());
             display.display();
             nivelAtual = NIVEL_INICIAL;
+            matrixStartAnimation(MATRIX_ANIM_CROSS, matrix); // Mostra a animação de erro
+            inicioAnimacaoResultado = millis();
           }
           display.fillRect(0, 40, LARGURA_TELA, 24, SSD1306_BLACK); // Limpa a linha de instrução
           display.setCursor(0, 40);
@@ -351,7 +361,7 @@ void tratarBotaoGravar() {
             xQueueReset(filaAudio);
             gravando = true;
             estado = GRAVANDO;
-            matrix.displayClear(); // Apaga a matriz ao pressionar o botão B para gravar
+            matrixClear(matrix); // Apaga a matriz ao pressionar o botão B para gravar
             display.fillRect(0, 40, LARGURA_TELA, 24, SSD1306_BLACK); // Limpa a linha de instrução
             display.setCursor(0, 40);
             display.print("Gravando: Solte B");
@@ -409,8 +419,7 @@ void tratarMemorizacao() {
     // Configura o estado inicial do pisca-pisca antes de mudar de estado
     estadoLedPisca = true;
     ultimoPiscaMatriz = millis();
-    matrix.setTextAlignment(PA_CENTER); // Centraliza o 0 sozinho
-    matrix.print("0");
+    matrixShowText("0", matrix); // Centraliza o 0 sozinho
     singleNoteBuzzer(NOTE_A4, 800);
     estado = PALAVRA_PRONTA;
     return;
@@ -421,14 +430,17 @@ void tratarMemorizacao() {
   if (segundosRestantes != ultimoSegundoMostrado) {
     segundosRestantes > 5 ? singleNoteBuzzer(NOTE_A4, 500) : singleNoteBuzzer(NOTE_A5, 500);
     ultimoSegundoMostrado = segundosRestantes;
-    // Atualiza a matriz de LED com MD_Parola
-    // Centraliza o texto. Se o número for "10", ele vai se ajustar no espaço da matriz.
-    matrix.setTextAlignment(PA_CENTER);
-    matrix.print(String(segundosRestantes));
+    // Atualiza a matriz de LED com o módulo (texto centralizado).
+    // Se o número for "10", ele vai se ajustar no espaço da matriz.
+    matrixShowText(String(segundosRestantes), matrix);
   }
 }
 
 void tratarMatrix(){
+  // Avança os frames da animação (matrixTick só faz efeito se o módulo
+  // estiver em modo animação, então é seguro chamar sempre daqui)
+  matrixTick(INTERVALO_FRAME_RESULTADO, matrix);
+
   if (estado != PALAVRA_PRONTA) return;
 
   // Lógica não-bloqueante para piscar a matriz no estado PALAVRA_PRONTA
@@ -438,10 +450,9 @@ void tratarMatrix(){
       estadoLedPisca = !estadoLedPisca;
       
       if (estadoLedPisca) {
-        matrix.setTextAlignment(PA_CENTER);
-        matrix.print("0");
+        matrixShowText("0", matrix);
       } else {
-        matrix.displayClear();
+        matrixClear(matrix);
       }
     }
   }
@@ -455,9 +466,7 @@ void setup() {
 
   // Inicializa o barramento SPI com os pinos customizados do ESP32 (HSPI) e a Matriz LED
   hspi.begin(CLK_PIN, -1, DATA_PIN, CS_PIN); // SCK, MISO (não usado), MOSI, SS
-  matrix.begin();
-  matrix.setIntensity(1);
-  matrix.displayClear();
+  matrixInit(matrix, 1);
 
   if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // Inicializa o display I2C no endereço 0x3C 
     Serial.println(F("Falha ao inicializar o display SSD1306. Verifique as conexões!"));
