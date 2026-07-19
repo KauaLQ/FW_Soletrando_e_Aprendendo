@@ -4,6 +4,7 @@
 #include <Adafruit_SSD1306.h>
 #include <MD_Parola.h>
 #include "img.h"
+#include "modules/buzzer/buzzer.h"
 #include <driver/i2s.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -12,7 +13,7 @@
 // ---------- Configurações de rede ----------
 const char* WIFI_SSID     = "KAUA_LQ";
 const char* WIFI_PASSWORD = "12345678";
-const char* WS_HOST       = "192.168.1.102"; // IP do PC rodando backend.py
+const char* WS_HOST       = "192.168.1.107"; // IP do PC rodando backend.py
 const uint16_t WS_PORT    = 8080;
 const char* WS_PATH       = "/";
 
@@ -183,6 +184,7 @@ void tarefaCapturaAudio(void *parametro) {
 void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
   switch (type) {
     case WStype_CONNECTED:
+      startBuzzerSong(1);  // Inicia a música uma vez
       display.clearDisplay();
       display.setCursor(0, 0);
       display.print("Conectado ao backend");
@@ -236,12 +238,14 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
             display.display();
             if (nivelAtual >= NIVEL_MAXIMO) {
               // fechou o ciclo: acertou no nível máximo -> recomeça do 1
+              startBuzzerSong(2);
               display.fillRect(0, 0, LARGURA_TELA, 10, SSD1306_BLACK); // Limpa a linha de status
               display.setCursor(0, 0);
               display.print("Jogo concluido!");
               display.display();
               nivelAtual = NIVEL_INICIAL;
             } else {
+              singleNoteBuzzer(NOTE_A5, 600);
               nivelAtual++;
               display.fillRect(0, 0, LARGURA_TELA, 10, SSD1306_BLACK); // Limpa a linha de status
               display.setCursor(0, 0);
@@ -249,6 +253,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
               display.display();
             }
           } else {
+            singleNoteBuzzer(NOTE_C4, 600);
             display.fillRect(0, 0, LARGURA_TELA, 10, SSD1306_BLACK); // Limpa a linha de status
             display.fillRect(0, 15, LARGURA_TELA, 20, SSD1306_BLACK); // Limpa a linha da palavra
             display.setCursor(0, 0);
@@ -304,6 +309,7 @@ void tratarBotaoPalavra() {
           webSocket.sendTXT(("pedir_palavra " + String(nivelAtual)).c_str());
           estado = AGUARDANDO_RESPOSTA_PALAVRA;
         } else {
+          singleNoteBuzzer(NOTE_C4, 300);
           display.fillRect(0, 40, LARGURA_TELA, 24, SSD1306_BLACK); // Limpa a linha de instrução
           display.setCursor(0, 40);
           display.print("Botao indisponivel");
@@ -332,6 +338,7 @@ void tratarBotaoGravar() {
       if (estadoConfirmadoGravar == LOW) { // Acabou de PRESSIONAR o botão (Transição para LOW)
         if (!gravando) {
           if (estado != PALAVRA_PRONTA) {
+            singleNoteBuzzer(NOTE_C4, 300);
             display.fillRect(0, 40, LARGURA_TELA, 24, SSD1306_BLACK); // Limpa a linha de instrução
             display.setCursor(0, 40);
             display.print("Botao indisponivel");
@@ -404,6 +411,7 @@ void tratarMemorizacao() {
     ultimoPiscaMatriz = millis();
     matrix.setTextAlignment(PA_CENTER); // Centraliza o 0 sozinho
     matrix.print("0");
+    singleNoteBuzzer(NOTE_A4, 800);
     estado = PALAVRA_PRONTA;
     return;
   }
@@ -411,6 +419,7 @@ void tratarMemorizacao() {
   // Atualiza o contador na tela só quando o segundo restante mudar
   int segundosRestantes = (duracaoMemorizacao - decorrido + 999) / 1000; // arredonda pra cima
   if (segundosRestantes != ultimoSegundoMostrado) {
+    segundosRestantes > 5 ? singleNoteBuzzer(NOTE_A4, 500) : singleNoteBuzzer(NOTE_A5, 500);
     ultimoSegundoMostrado = segundosRestantes;
     // Atualiza a matriz de LED com MD_Parola
     // Centraliza o texto. Se o número for "10", ele vai se ajustar no espaço da matriz.
@@ -496,11 +505,14 @@ void setup() {
   webSocket.begin(WS_HOST, WS_PORT, WS_PATH);
   webSocket.onEvent(webSocketEvent);
   webSocket.setReconnectInterval(5000);
+
+  initBuzzer();       // Inicializa o módulo do buzzer
 }
 
 // ---------- Loop (núcleo 1) ----------
 void loop() {
   webSocket.loop();
+  updateBuzzerTick(); // Atualiza o buzzer (essencial rodar o tempo todo livremente)
   tratarBotaoPalavra();
   tratarBotaoGravar();
   tratarMemorizacao();
