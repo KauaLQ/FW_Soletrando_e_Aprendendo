@@ -8,6 +8,7 @@
 enum MatrixAnimation : uint8_t {
   MATRIX_ANIM_CHECK  = 0, // animação de onda/pulso -> usada para ACERTO
   MATRIX_ANIM_CROSS  = 1, // X piscando -> usada para ERRO
+  MATRIX_ANIM_ARROW  = 2
 };
 
 // ---------- Modo atual do módulo (uso interno / consulta opcional) ----------

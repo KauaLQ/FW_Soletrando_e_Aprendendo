@@ -1,6 +1,7 @@
 /*
-TODO:   Resolver problema de "flirck" na animação de check (não sei se acontece em alguma outra, talvez seja interessante testar antes)
-        Adicionar novas animações para "espaços vazios"
+TODO:   Adicionar nova função de alto nível para texto scroll
+        Adicionar animação de vitória
+        Adicionar tempos diferentes para as animações 
 */
 
 #include "matrix.h"
@@ -25,6 +26,9 @@ void matrixImage(uint8_t animationId, uint16_t frameIdx, MD_Parola &P) {
     case MATRIX_ANIM_CROSS:
       if (frameIdx < IMAGES_CROSS_LEN) frameSelected = IMAGES_CROSS[frameIdx];
       break;
+    case MATRIX_ANIM_ARROW:
+      if (frameIdx < IMAGES_ARROW_LEN) frameSelected = IMAGES_ARROW[frameIdx];
+      break;
     default:
       return;
   }
@@ -32,8 +36,10 @@ void matrixImage(uint8_t animationId, uint16_t frameIdx, MD_Parola &P) {
   if (frameSelected != nullptr) {
     MD_MAX72XX *mx = P.getGraphicObject();
     if (mx != nullptr) {
+      mx->control(MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
       mx->setBuffer(7, 8, (uint8_t*)frameSelected);
       mx->transform(MD_MAX72XX::TRC);
+      mx->control(MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
     }
   }
 }
@@ -56,6 +62,7 @@ void matrixUpdate(uint8_t animationId, uint32_t intervalDelay, MD_Parola &P) {
     int totalFrames = 0;
     if (animationId == MATRIX_ANIM_CHECK) totalFrames = IMAGES_CHECK_LEN;
     else if (animationId == MATRIX_ANIM_CROSS) totalFrames = IMAGES_CROSS_LEN;
+    else if (animationId == MATRIX_ANIM_ARROW) totalFrames = IMAGES_ARROW_LEN;
 
     if (totalFrames > 0) {
       currentFrame++;

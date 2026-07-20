@@ -1,6 +1,6 @@
 #ifndef ANIMATIONS_H
 #define ANIMATIONS_H
-
+// Animações feitas através do site: https://xantorohara.github.io/led-matrix-editor/
 #include <Arduino.h>
 
 // Animação 0: Sinal "check" em loop
@@ -140,5 +140,29 @@ const uint8_t IMAGES_CROSS[][8] = {
 }
 };
 const int IMAGES_CROSS_LEN = sizeof(IMAGES_CROSS) / 8;
+
+// Animação 2: Seta apontando para baixo
+const uint8_t IMAGES_ARROW[][8] = {
+{
+  0b00000000,
+  0b00011000,
+  0b00011000,
+  0b00011000,
+  0b00011000,
+  0b01111110,
+  0b00111100,
+  0b00011000
+},{
+  0b00011000,
+  0b00011000,
+  0b00011000,
+  0b00011000,
+  0b01111110,
+  0b00111100,
+  0b00011000,
+  0b00000000
+}};
+const int IMAGES_ARROW_LEN = sizeof(IMAGES_ARROW)/8;
+
 
 #endif

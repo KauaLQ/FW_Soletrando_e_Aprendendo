@@ -14,7 +14,7 @@
 // ---------- Configurações de rede ----------
 const char* WIFI_SSID     = "KAUA_LQ";
 const char* WIFI_PASSWORD = "12345678";
-const char* WS_HOST       = "192.168.1.105"; // IP do PC rodando backend.py
+const char* WS_HOST       = "192.168.1.104"; // IP do PC rodando backend.py
 const uint16_t WS_PORT    = 8080;
 const char* WS_PATH       = "/";
 
@@ -106,7 +106,6 @@ int ultimoSegundoMostrado = -1; // pra só redesenhar quando o segundo mudar
 
 // ---------- Controle não-bloqueante da animação de resultado (acerto/erro) ----------
 #define INTERVALO_FRAME_RESULTADO  150   // velocidade de troca de frames
-unsigned long inicioAnimacaoResultado = 0;
 
 unsigned long obterTempoMemorizacao(int nivel) {
   switch (nivel) {
@@ -189,12 +188,18 @@ void tarefaCapturaAudio(void *parametro) {
 void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
   switch (type) {
     case WStype_CONNECTED:
+      matrixStartAnimation(MATRIX_ANIM_ARROW, matrix);
       startBuzzerSong(1);  // Inicia a música uma vez
       display.clearDisplay();
       display.setCursor(0, 0);
       display.print("Conectado ao backend");
       display.setCursor(0, 10);
       display.drawFastHLine(0, 10, LARGURA_TELA, SSD1306_WHITE);
+      display.setCursor(0, 15);
+      display.print("Aperte A para");
+      display.setCursor(0, 25);
+      display.print("Iniciar/Continuar");
+      display.drawFastHLine(0, 35, LARGURA_TELA, SSD1306_WHITE);
       display.display();
       break;
     case WStype_DISCONNECTED:
@@ -243,7 +248,6 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
             display.setTextSize(1);
             display.display();
             matrixStartAnimation(MATRIX_ANIM_CHECK, matrix); // Mostra a animação de acerto
-            inicioAnimacaoResultado = millis();
             if (nivelAtual >= NIVEL_MAXIMO) {
               // fechou o ciclo: acertou no nível máximo -> recomeça do 1
               startBuzzerSong(2);
@@ -273,7 +277,6 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
             display.display();
             nivelAtual = NIVEL_INICIAL;
             matrixStartAnimation(MATRIX_ANIM_CROSS, matrix); // Mostra a animação de erro
-            inicioAnimacaoResultado = millis();
           }
           display.fillRect(0, 40, LARGURA_TELA, 24, SSD1306_BLACK); // Limpa a linha de instrução
           display.setCursor(0, 40);
