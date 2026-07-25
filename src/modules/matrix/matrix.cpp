@@ -1,9 +1,3 @@
-/*
-TODO:   Adicionar nova função de alto nível para texto scroll
-        Adicionar animação de vitória
-        Adicionar tempos diferentes para as animações 
-*/
-
 #include "matrix.h"
 #include "animations.h"
 
@@ -11,9 +5,29 @@ TODO:   Adicionar nova função de alto nível para texto scroll
 static uint32_t lastUpdateTime = 0;
 static uint16_t currentFrame = 0;
 static uint8_t lastAnimationId = 255;
-// Modo atual do módulo. É isso que evita o conflito entre a API de baixo nível (buffer direto do MD_MAX72XX) e a API de alto nível do Parola (print/displayClear).
+
+// Modo atual do módulo. É isso que evita o conflito entre a API de baixo nível
+// (buffer direto do MD_MAX72XX) e a API de alto nível do Parola (print/scroll/displayClear).
 static MatrixMode currentMode = MATRIX_MODE_IDLE;
 static uint8_t activeAnimationId = 255;
+static uint32_t activeAnimationInterval = 200; // intervalo (ms) da animação ativa no momento
+
+// Buffer próprio pro texto do scroll: o Parola guarda só o PONTEIRO do texto
+// passado a displayScroll/displayText, não uma cópia. Se passássemos direto o
+// c_str() de uma String recebida por parâmetro, o ponteiro podia virar lixo
+// assim que a função retornasse. Por isso mantemos uma cópia estável aqui.
+#define SCROLL_BUFFER_SIZE 64
+static char scrollBuffer[SCROLL_BUFFER_SIZE];
+
+// ---------- Intervalo padrão de cada animação (ms) ----------
+static uint32_t defaultIntervalFor(uint8_t animationId) {
+  switch (animationId) {
+    case MATRIX_ANIM_CHECK: return 200;
+    case MATRIX_ANIM_CROSS: return 200;
+    case MATRIX_ANIM_ARROW: return 300;
+    default: return 200;
+  }
+}
 
 // ----------- Baixo Nível -----------
 void matrixImage(uint8_t animationId, uint16_t frameIdx, MD_Parola &P) {
@@ -36,6 +50,10 @@ void matrixImage(uint8_t animationId, uint16_t frameIdx, MD_Parola &P) {
   if (frameSelected != nullptr) {
     MD_MAX72XX *mx = P.getGraphicObject();
     if (mx != nullptr) {
+      // Desliga a auto-atualização enquanto mexemos no buffer: setBuffer() e
+      // transform() cada um dispararia uma atualização parcial pro hardware
+      // se UPDATE ficasse ligado, causando aquele "flicker" de LEDs errados
+      // piscando no meio da transição. Assim, só existe UM push final.
       mx->control(MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
       mx->setBuffer(7, 8, (uint8_t*)frameSelected);
       mx->transform(MD_MAX72XX::TRC);
@@ -76,6 +94,15 @@ void matrixUpdate(uint8_t animationId, uint32_t intervalDelay, MD_Parola &P) {
 }
 
 // ----------- Alto nível -----------
+
+// Sai do modo de buffer direto (ANIM) de forma limpa antes de usar a API de
+// texto do Parola (TEXT ou SCROLL), pra não sobrar lixo do frame anterior.
+static void leaveAnimModeIfNeeded(MD_Parola &P) {
+  if (currentMode == MATRIX_MODE_ANIM) {
+    P.displayClear();
+  }
+}
+
 void matrixInit(MD_Parola &P, uint8_t intensity) {
   P.begin();
   P.setIntensity(intensity);
@@ -84,12 +111,7 @@ void matrixInit(MD_Parola &P, uint8_t intensity) {
 }
 
 void matrixShowText(const String &text, MD_Parola &P, textPosition_t align) {
-  // Se estávamos numa animação de frames (buffer direto), o Parola não sabe
-  // disso. Precisamos limpar antes de voltar a usar a API de texto dele,
-  // senão o texto pode ser desenhado por cima de lixo do frame anterior.
-  if (currentMode == MATRIX_MODE_ANIM) {
-    P.displayClear();
-  }
+  leaveAnimModeIfNeeded(P);
 
   P.setTextAlignment(align);
   P.print(text);
@@ -102,15 +124,17 @@ void matrixShowText(const String &text, MD_Parola &P, textPosition_t align) {
   activeAnimationId = 255;
 }
 
-void matrixStartAnimation(MatrixAnimation anim, MD_Parola &P) {
-  // Se estávamos em modo texto, o Parola pode ter estado interno pendente
-  // (texto em animação, cursor, etc.). Limpamos antes de tomar o controle
-  // do buffer diretamente via matrixImage/matrixUpdate.
-  if (currentMode == MATRIX_MODE_TEXT) {
+void matrixStartAnimation(MatrixAnimation anim, MD_Parola &P, uint32_t intervalMs) {
+  // Se estávamos em modo texto ou scroll, o Parola pode ter estado interno
+  // pendente. Limpamos antes de tomar o controle do buffer diretamente via
+  // matrixImage/matrixUpdate.
+  if (currentMode == MATRIX_MODE_TEXT || currentMode == MATRIX_MODE_SCROLL) {
     P.displayClear();
   }
 
   activeAnimationId = (uint8_t)anim;
+  // intervalMs = 0 usa o intervalo padrão definido internamente para aquela animação passe um valor > 0 para sobrescrever.
+  activeAnimationInterval = (intervalMs > 0) ? intervalMs : defaultIntervalFor(activeAnimationId);
   currentMode = MATRIX_MODE_ANIM;
 
   // Força o primeiro frame a ser desenhado imediatamente
@@ -118,9 +142,34 @@ void matrixStartAnimation(MatrixAnimation anim, MD_Parola &P) {
   matrixUpdate(activeAnimationId, 0, P);
 }
 
-void matrixTick(uint32_t intervalDelay, MD_Parola &P) {
-  if (currentMode != MATRIX_MODE_ANIM) return;
-  matrixUpdate(activeAnimationId, intervalDelay, P);
+// Inicia um texto rolando na matriz (scroll), não-bloqueante.
+// speed = ms por coluna (quanto MENOR, mais rápido o scroll).
+void matrixStartScroll(const String &text, MD_Parola &P, textEffect_t effect, uint16_t speed) {
+  leaveAnimModeIfNeeded(P);
+
+  text.toCharArray(scrollBuffer, SCROLL_BUFFER_SIZE);
+
+  P.setTextAlignment(PA_LEFT);
+  P.setSpeed(speed);
+  P.displayScroll(scrollBuffer, PA_LEFT, effect, speed);
+
+  currentMode = MATRIX_MODE_SCROLL;
+  lastAnimationId = 255;
+  activeAnimationId = 255;
+}
+
+void matrixTick(MD_Parola &P) {
+  if (currentMode == MATRIX_MODE_ANIM) {
+    matrixUpdate(activeAnimationId, activeAnimationInterval, P);
+  } else if (currentMode == MATRIX_MODE_SCROLL) {
+    // displayAnimate() retorna true quando um ciclo do scroll termina.
+    // Como queremos o scroll rodando em loop até um clear/outro modo,
+    // simplesmente reiniciamos o ciclo em vez de parar.
+    if (P.displayAnimate()) {
+      P.displayReset();
+    }
+  }
+  // MATRIX_MODE_TEXT e MATRIX_MODE_IDLE não precisam de nada a cada tick.
 }
 
 // Limpa fisicamente o display e zera completamente o estado interno do módulo

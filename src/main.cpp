@@ -14,14 +14,13 @@
 // ---------- Configurações de rede ----------
 const char* WIFI_SSID     = "KAUA_LQ";
 const char* WIFI_PASSWORD = "12345678";
-const char* WS_HOST       = "192.168.1.104"; // IP do PC rodando backend.py
+const char* WS_HOST       = "192.168.1.106"; // IP do PC rodando backend.py
 const uint16_t WS_PORT    = 8080;
 const char* WS_PATH       = "/";
 
 // ---------- Display OLED ----------
 #define LARGURA_TELA 128 
 #define ALTURA_TELA 64
-// Declara o objeto do display (-1 significa que o display não tem pino de RESET)
 Adafruit_SSD1306 display(LARGURA_TELA, ALTURA_TELA, &Wire, -1);
 
 // ---------- Configurações da Matriz LED ----------
@@ -103,9 +102,6 @@ unsigned long lastDebouncePalavraTime = 0;
 unsigned long inicioMemorizacao = 0;
 unsigned long duracaoMemorizacao = 0;
 int ultimoSegundoMostrado = -1; // pra só redesenhar quando o segundo mudar
-
-// ---------- Controle não-bloqueante da animação de resultado (acerto/erro) ----------
-#define INTERVALO_FRAME_RESULTADO  150   // velocidade de troca de frames
 
 unsigned long obterTempoMemorizacao(int nivel) {
   switch (nivel) {
@@ -247,7 +243,6 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
             display.printf("Acertou!");
             display.setTextSize(1);
             display.display();
-            matrixStartAnimation(MATRIX_ANIM_CHECK, matrix); // Mostra a animação de acerto
             if (nivelAtual >= NIVEL_MAXIMO) {
               // fechou o ciclo: acertou no nível máximo -> recomeça do 1
               startBuzzerSong(2);
@@ -256,6 +251,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
               display.print("Jogo concluido!");
               display.display();
               nivelAtual = NIVEL_INICIAL;
+              matrixStartScroll("PARABENS!", matrix, PA_SCROLL_LEFT, 80);
             } else {
               singleNoteBuzzer(NOTE_A5, 600);
               nivelAtual++;
@@ -263,6 +259,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
               display.setCursor(0, 0);
               display.printf("Proximo nivel: %d", nivelAtual);
               display.display();
+              matrixStartAnimation(MATRIX_ANIM_CHECK, matrix); // Mostra a animação de acerto
             }
           } else {
             singleNoteBuzzer(NOTE_C4, 600);
@@ -442,7 +439,7 @@ void tratarMemorizacao() {
 void tratarMatrix(){
   // Avança os frames da animação (matrixTick só faz efeito se o módulo
   // estiver em modo animação, então é seguro chamar sempre daqui)
-  matrixTick(INTERVALO_FRAME_RESULTADO, matrix);
+  matrixTick(matrix);
 
   if (estado != PALAVRA_PRONTA) return;
 
@@ -518,7 +515,7 @@ void setup() {
   webSocket.onEvent(webSocketEvent);
   webSocket.setReconnectInterval(5000);
 
-  initBuzzer();       // Inicializa o módulo do buzzer
+  initBuzzer(); // Inicializa o módulo do buzzer
 }
 
 // ---------- Loop (núcleo 1) ----------
