@@ -14,6 +14,8 @@ static const int16_t Y_SEPARADOR_1  = 10; // entre STATUS e PALAVRA
 static const int16_t Y_SEPARADOR_2  = 35; // entre PALAVRA e INSTRUCAO
 static const int16_t RODAPE_BOOT_Y  = 45; // linha de rodapé usada na tela de boot
 static const int16_t RODAPE_BOOT_H  = 19; // até o fim da tela (64 - 45)
+static const int16_t CORPO_MENSAGEM_Y = 15; // corpo da "mensagem cheia" (abaixo do título/separador)
+static const int16_t CORPO_MENSAGEM_H = 49; // até o fim da tela (64 - 15)
 
 // ---------- Estado de scroll não-bloqueante (um slot por região) ----------
 struct ScrollRegiao {
@@ -166,7 +168,9 @@ void oledLimparRegiao(OledRegiao regiao) {
   tela->display();
 }
 
-// Mensagem simples ocupando a tela toda (ex.: "Conectado ao backend")
+// Mensagem simples ocupando a tela toda (ex.: "Conectado ao backend").
+// Desenha o título + separador uma vez, e delega o corpo pra função de
+// atualização (assim ela pode ser chamada de novo depois, sozinha).
 void oledMostrarMensagemCheia(const String &titulo, const String &linha1, const String &linha2) {
   zerarTodosScrolls();
   tela->clearDisplay();
@@ -174,18 +178,29 @@ void oledMostrarMensagemCheia(const String &titulo, const String &linha1, const 
   tela->setCursor(0, 0);
   tela->print(titulo);
   tela->drawFastHLine(0, Y_SEPARADOR_1, tela->width(), SSD1306_WHITE);
+  tela->display();
+  oledAtualizarCorpoMensagemCheia(linha1, linha2); // desenha o corpo e já dá o display()
+}
+
+// Atualiza só o corpo (abaixo do título/separador) de uma "mensagem cheia".
+// Sempre limpa o retângulo do corpo inteiro antes, então nunca vaza/sobra
+// texto de uma chamada anterior -- seguro pra chamar em loop (ex.: pontinhos
+// de "Reconectando...").
+void oledAtualizarCorpoMensagemCheia(const String &linha1, const String &linha2) {
+  tela->fillRect(0, CORPO_MENSAGEM_Y, tela->width(), CORPO_MENSAGEM_H, SSD1306_BLACK);
+  tela->setTextSize(1);
   if (linha1.length() > 0) {
-    tela->setCursor(0, 15);
+    tela->setCursor(0, CORPO_MENSAGEM_Y);
     tela->print(linha1);
   }
   if (linha2.length() > 0) {
-    tela->setCursor(0, 25);
+    tela->setCursor(0, CORPO_MENSAGEM_Y + 10);
     tela->print(linha2);
   }
   tela->display();
 }
 
-// Tela de boot: desenha um bitmap no topo + até 2 linhas de rodapé
+// Tela de boot: desenha o logo no topo + até 2 linhas de rodapé
 void oledMostrarBoot(int16_t largura, int16_t altura, const String &rodape1, const String &rodape2) {
   zerarTodosScrolls();
   tela->clearDisplay();

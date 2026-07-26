@@ -14,7 +14,7 @@
 // ---------- Configurações de rede ----------
 const char* WIFI_SSID     = "KAUA_LQ";
 const char* WIFI_PASSWORD = "12345678";
-const char* WS_HOST       = "192.168.1.106"; // IP do PC rodando backend.py
+const char* WS_HOST       = "192.168.1.107"; // IP do PC rodando backend.py
 const uint16_t WS_PORT    = 8080;
 const char* WS_PATH       = "/";
 
@@ -61,6 +61,17 @@ bool estadoLedPisca = true;
 #define NIVEL_INICIAL 1
 #define NIVEL_MAXIMO  3
 int nivelAtual = NIVEL_INICIAL;
+
+// ---------- Estado da conexão WiFi (independente da conexão com o backend) ----------
+// A queda do backend (WStype_DISCONNECTED) já é tratada pelo webSocketEvent.
+// Aqui cuidamos especificamente da queda do WiFi em si, com sua própria tela
+// e reconexão automática não-bloqueante.
+#define INTERVALO_RECONEXAO_WIFI_MS 5000
+#define INTERVALO_PONTOS_WIFI_MS    400
+bool wifiEstavaConectado = true; // true pois o setup() só segue depois de conectar
+unsigned long ultimaTentativaReconexaoWifi = 0;
+unsigned long ultimoPontoWifi = 0;
+String pontosWifi = "";
 
 typedef struct {
   int16_t dados[CHUNK_AMOSTRAS];
@@ -189,10 +200,12 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
       oledMostrarMensagemCheia("Conectado ao backend", "Aperte A para", "Iniciar/Continuar");
       break;
     case WStype_DISCONNECTED:
-      estado = AGUARDANDO_PEDIDO_PALAVRA; // reseta a máquina de estados para evitar que o jogo fique travado em um "estado fantasma"
-      singleNoteBuzzer(REST, 100);        // Desliga o buzzer a qualquer custo
-      matrixClear(matrix);                // Apaga a matriz ao perder a conexão com o backend
-      oledMostrarMensagemCheia("Aguardando backend");
+      estado = AGUARDANDO_PEDIDO_PALAVRA;   // reseta a máquina de estados para evitar que o jogo fique travado em um "estado fantasma"
+      singleNoteBuzzer(REST, 100);          // Desliga o buzzer a qualquer custo
+      matrixClear(matrix);                  // Apaga a matriz ao perder a conexão com o backend
+      if (WiFi.status() == WL_CONNECTED) {  // Se o WiFi também caiu, a tela específica de WiFi já está sendo exibida
+        oledMostrarMensagemCheia("Aguardando backend");
+      }
       break;
     case WStype_TEXT: {
       String resposta = String((char*)payload).substring(0, length);
@@ -395,7 +408,53 @@ void tratarMatrix(){
   }
 }
 
-// ---------- Setup ----------
+// ---------- WiFi: detecta queda e reconecta sozinho, sem travar o loop ----------
+void tratarWifi() {
+  bool conectado = (WiFi.status() == WL_CONNECTED);
+
+  if (conectado && !wifiEstavaConectado) {
+    // Acabou de voltar. O jogo em si só volta a responder quando o
+    // webSocket reconectar sozinho (ele já tem retry automático), então só
+    // avisamos que o WiFi voltou e deixamos o webSocketEvent cuidar do resto.
+    wifiEstavaConectado = true;
+    oledMostrarMensagemCheia("WiFi reconectado!", "Conectando ao", "servidor...");
+    return;
+  }
+
+  if (!conectado && wifiEstavaConectado) {
+    // Acabou de cair: reseta o jogo (igual fazemos quando o backend cai) e
+    // mostra a tela específica de queda de WiFi.
+    wifiEstavaConectado = false;
+    estado = AGUARDANDO_PEDIDO_PALAVRA;
+    singleNoteBuzzer(REST, 100);
+    matrixClear(matrix);
+    pontosWifi = "";
+    ultimoPontoWifi = millis();
+    ultimaTentativaReconexaoWifi = millis();
+    oledMostrarMensagemCheia("WiFi desconectado", "Reconectando");
+    return;
+  }
+
+  if (!conectado) {
+    // Pontinhos animados de "Reconectando...", só atualiza o corpo da
+    // mensagem (nunca redesenha o título), então nunca sobra "lixo" na tela
+    // independente de quantos pontos tiverem.
+    if (millis() - ultimoPontoWifi >= INTERVALO_PONTOS_WIFI_MS) {
+      ultimoPontoWifi = millis();
+      pontosWifi += ".";
+      if (pontosWifi.length() > 3) pontosWifi = "";
+      oledAtualizarCorpoMensagemCheia("Reconectando" + pontosWifi);
+    }
+
+    // Tenta reconectar periodicamente, sem bloquear o resto do loop
+    if (millis() - ultimaTentativaReconexaoWifi >= INTERVALO_RECONEXAO_WIFI_MS) {
+      ultimaTentativaReconexaoWifi = millis();
+      WiFi.reconnect();
+    }
+  }
+}
+
+
 void setup() {
   Serial.begin(115200);
   pinMode(BUTTON_GRAVAR_PIN, INPUT);
@@ -413,6 +472,7 @@ void setup() {
   oledInit(display);
   oledMostrarBoot(128, 40, "Conectando WiFi");
 
+  WiFi.setAutoReconnect(true); // ajuda o próprio driver a já tentar sozinho
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   String pontos = "";
   while (WiFi.status() != WL_CONNECTED) {
@@ -446,6 +506,7 @@ void loop() {
   tratarBotaoGravar();
   tratarMemorizacao();
   tratarMatrix();
+  tratarWifi();
   oledTick(); // avança o scroll de textos grandes, se houver algum ativo
 
   ChunkAudio chunk;
