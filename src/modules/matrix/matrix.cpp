@@ -94,7 +94,6 @@ void matrixUpdate(uint8_t animationId, uint32_t intervalDelay, MD_Parola &P) {
 }
 
 // ----------- Alto nível -----------
-
 // Sai do modo de buffer direto (ANIM) de forma limpa antes de usar a API de
 // texto do Parola (TEXT ou SCROLL), pra não sobrar lixo do frame anterior.
 static void leaveAnimModeIfNeeded(MD_Parola &P) {

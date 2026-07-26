@@ -3,9 +3,9 @@
 #include <WebSocketsClient.h>
 #include <Adafruit_SSD1306.h>
 #include <MD_Parola.h>
-#include "img.h"
 #include "modules/buzzer/buzzer.h"
 #include "modules/matrix/matrix.h"
+#include "modules/oled/oled.h"
 #include <driver/i2s.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -186,26 +186,13 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
     case WStype_CONNECTED:
       matrixStartAnimation(MATRIX_ANIM_ARROW, matrix);
       startBuzzerSong(1);  // Inicia a música uma vez
-      display.clearDisplay();
-      display.setCursor(0, 0);
-      display.print("Conectado ao backend");
-      display.setCursor(0, 10);
-      display.drawFastHLine(0, 10, LARGURA_TELA, SSD1306_WHITE);
-      display.setCursor(0, 15);
-      display.print("Aperte A para");
-      display.setCursor(0, 25);
-      display.print("Iniciar/Continuar");
-      display.drawFastHLine(0, 35, LARGURA_TELA, SSD1306_WHITE);
-      display.display();
+      oledMostrarMensagemCheia("Conectado ao backend", "Aperte A para", "Iniciar/Continuar");
       break;
     case WStype_DISCONNECTED:
-      matrixClear(matrix); // Apaga a matriz ao perder a conexão com o backend
-      display.clearDisplay();
-      display.setCursor(0, 0);
-      display.print("Aguardando backend");
-      display.setCursor(0, 10);
-      display.drawFastHLine(0, 10, LARGURA_TELA, SSD1306_WHITE);
-      display.display();
+      estado = AGUARDANDO_PEDIDO_PALAVRA; // reseta a máquina de estados para evitar que o jogo fique travado em um "estado fantasma"
+      singleNoteBuzzer(REST, 100);        // Desliga o buzzer a qualquer custo
+      matrixClear(matrix);                // Apaga a matriz ao perder a conexão com o backend
+      oledMostrarMensagemCheia("Aguardando backend");
       break;
     case WStype_TEXT: {
       String resposta = String((char*)payload).substring(0, length);
@@ -213,19 +200,12 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
       switch (estado) {
         case AGUARDANDO_RESPOSTA_PALAVRA:
           palavraAtual = resposta;
-          display.fillRect(0, 0, LARGURA_TELA, 10, SSD1306_BLACK); // Limpa a linha de status
-          display.fillRect(0, 15, LARGURA_TELA, 20, SSD1306_BLACK); // Limpa a linha da palavra
-          display.setCursor(0, 0);
-          display.printf("Nivel %d", nivelAtual);
-          display.setTextSize(2);
-          display.setCursor(0, 15);
-          display.printf("%s", palavraAtual.c_str());
-          display.setTextSize(1);
-          display.drawFastHLine(0, 35, LARGURA_TELA, SSD1306_WHITE);
-          display.fillRect(0, 40, LARGURA_TELA, 24, SSD1306_BLACK); // Limpa a linha de instrução
-          display.setCursor(0, 40);
-          display.print("Memorize a palavra!");
-          display.display();
+          oledIniciarTelaJogo(); // remonta o layout de jogo (separadores) do zero
+          oledSetTexto(OLED_STATUS, "Nivel " + String(nivelAtual));
+          // Palavra centralizada em texto grande; se for maior que a tela,
+          // o próprio módulo ativa o scroll automático em vez de vazar.
+          oledSetTexto(OLED_PALAVRA, palavraAtual, 2, true);
+          oledSetTexto(OLED_INSTRUCAO, "Memorize a palavra!");
           // Inicia o timer de memorização (não bloqueante)
           duracaoMemorizacao = obterTempoMemorizacao(nivelAtual);
           inicioMemorizacao = millis();
@@ -237,58 +217,33 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
           // Debug: mostra a resposta do backend no console. Descomente caso necessário.
           // Serial.printf("[JOGO] Resultado do backend: %s\n", resposta.c_str());
           if (resposta == palavraAtual) {
-            display.fillRect(0, 15, LARGURA_TELA, 20, SSD1306_BLACK); // Limpa a linha da palavra
-            display.setTextSize(2);
-            display.setCursor(0, 15);
-            display.printf("Acertou!");
-            display.setTextSize(1);
-            display.display();
+            oledSetTexto(OLED_PALAVRA, "Acertou!", 2, true);
             if (nivelAtual >= NIVEL_MAXIMO) {
               // fechou o ciclo: acertou no nível máximo -> recomeça do 1
               startBuzzerSong(2);
-              display.fillRect(0, 0, LARGURA_TELA, 10, SSD1306_BLACK); // Limpa a linha de status
-              display.setCursor(0, 0);
-              display.print("Jogo concluido!");
-              display.display();
+              oledSetTexto(OLED_STATUS, "Jogo concluido!");
               nivelAtual = NIVEL_INICIAL;
               matrixStartScroll("PARABENS!", matrix, PA_SCROLL_LEFT, 80);
             } else {
               singleNoteBuzzer(NOTE_A5, 600);
               nivelAtual++;
-              display.fillRect(0, 0, LARGURA_TELA, 10, SSD1306_BLACK); // Limpa a linha de status
-              display.setCursor(0, 0);
-              display.printf("Proximo nivel: %d", nivelAtual);
-              display.display();
+              oledSetTexto(OLED_STATUS, "Proximo nivel: " + String(nivelAtual));
               matrixStartAnimation(MATRIX_ANIM_CHECK, matrix); // Mostra a animação de acerto
             }
           } else {
             singleNoteBuzzer(NOTE_C4, 600);
-            display.fillRect(0, 0, LARGURA_TELA, 10, SSD1306_BLACK); // Limpa a linha de status
-            display.fillRect(0, 15, LARGURA_TELA, 20, SSD1306_BLACK); // Limpa a linha da palavra
-            display.setCursor(0, 0);
-            display.print("Nivel resetado");
-            display.setCursor(0, 15);
-            display.printf("Palavra: %s", palavraAtual.c_str());
-            display.setCursor(0, 25);
-            display.printf("Resposta: %s", resposta.c_str());
-            display.display();
+            oledSetTexto(OLED_STATUS, "Nivel resetado");
+            // Duas linhas curtas; se algum nome vier grande demais, é truncado com "..."
+            oledSetDuasLinhas(OLED_PALAVRA, "Palavra: " + palavraAtual, "Resposta: " + resposta);
             nivelAtual = NIVEL_INICIAL;
             matrixStartAnimation(MATRIX_ANIM_CROSS, matrix); // Mostra a animação de erro
           }
-          display.fillRect(0, 40, LARGURA_TELA, 24, SSD1306_BLACK); // Limpa a linha de instrução
-          display.setCursor(0, 40);
-          display.print("Aperte A para pedir");
-          display.display();
+          oledSetTexto(OLED_INSTRUCAO, "Aperte A para pedir");
           estado = AGUARDANDO_PEDIDO_PALAVRA;
           break;
 
         default:
-          display.fillRect(0, 15, LARGURA_TELA, 20, SSD1306_BLACK); // Limpa a linha da palavra
-          display.setTextSize(2);
-          display.setCursor(0, 15);
-          display.printf("ERRO");
-          display.setTextSize(1);
-          display.display();
+          oledSetTexto(OLED_PALAVRA, "ERRO", 2, true);
           // Debug: mostra a resposta do backend no console. Descomente caso necessário.
           // Serial.printf("[WS] Resposta inesperada (estado atual nao esperava texto): %s\n", resposta.c_str());
           break;
@@ -313,19 +268,19 @@ void tratarBotaoPalavra() {
     if (leitura != estadoConfirmadoPalavra) {
       estadoConfirmadoPalavra = leitura;
       if (estadoConfirmadoPalavra == LOW) {
+        // Verifica, primeiramente, se o server está conectado
+        if(!webSocket.isConnected() || estado == MEMORIZANDO_PALAVRA){
+          singleNoteBuzzer(NOTE_C4, 300);
+          oledSetDuasLinhas(OLED_INSTRUCAO, "Botao indisponivel", "Por favor, aguarde.");
+        } 
         // só permite pedir palavra nova se não estivermos no meio de uma gravação ou já esperando resposta
-        if (estado == AGUARDANDO_PEDIDO_PALAVRA) {
+        else if (estado == AGUARDANDO_PEDIDO_PALAVRA) {
           // Serial.printf("[BOTAO] Pedindo palavra (nivel %d)...\n", nivelAtual);
           webSocket.sendTXT(("pedir_palavra " + String(nivelAtual)).c_str());
           estado = AGUARDANDO_RESPOSTA_PALAVRA;
         } else {
           singleNoteBuzzer(NOTE_C4, 300);
-          display.fillRect(0, 40, LARGURA_TELA, 24, SSD1306_BLACK); // Limpa a linha de instrução
-          display.setCursor(0, 40);
-          display.print("Botao indisponivel");
-          display.setCursor(0, 50);
-          display.print("Segure B para gravar");
-          display.display();
+          oledSetDuasLinhas(OLED_INSTRUCAO, "Botao indisponivel", "Segure B para gravar");
         }
       }
     }
@@ -347,14 +302,13 @@ void tratarBotaoGravar() {
       estadoConfirmadoGravar = leitura;
       if (estadoConfirmadoGravar == LOW) { // Acabou de PRESSIONAR o botão (Transição para LOW)
         if (!gravando) {
-          if (estado != PALAVRA_PRONTA) {
+          // Verifica, primeiramente, se o server está conectado
+          if(!webSocket.isConnected() || estado == MEMORIZANDO_PALAVRA){
             singleNoteBuzzer(NOTE_C4, 300);
-            display.fillRect(0, 40, LARGURA_TELA, 24, SSD1306_BLACK); // Limpa a linha de instrução
-            display.setCursor(0, 40);
-            display.print("Botao indisponivel");
-            display.setCursor(0, 50);
-            display.print("Aperte A para pedir");
-            display.display();
+            oledSetDuasLinhas(OLED_INSTRUCAO, "Botao indisponivel", "Por favor, aguarde.");
+          } else if (estado != PALAVRA_PRONTA) {
+            singleNoteBuzzer(NOTE_C4, 300);
+            oledSetDuasLinhas(OLED_INSTRUCAO, "Botao indisponivel", "Aperte A para pedir");
           } else {
             diagMin = INT32_MAX;
             diagMax = INT32_MIN;
@@ -362,24 +316,14 @@ void tratarBotaoGravar() {
             gravando = true;
             estado = GRAVANDO;
             matrixClear(matrix); // Apaga a matriz ao pressionar o botão B para gravar
-            display.fillRect(0, 40, LARGURA_TELA, 24, SSD1306_BLACK); // Limpa a linha de instrução
-            display.setCursor(0, 40);
-            display.print("Gravando: Solte B");
-            display.setCursor(0, 50);
-            display.print("para finalizar");
-            display.display();
+            oledSetDuasLinhas(OLED_INSTRUCAO, "Gravando: Solte B", "para finalizar");
             webSocket.sendTXT("start_audio");
           }
         }
       } else if (estadoConfirmadoGravar == HIGH) { // Acabou de SOLTAR o botão (Transição para HIGH)
         if (gravando) {
           gravando = false;
-          display.fillRect(0, 40, LARGURA_TELA, 24, SSD1306_BLACK); // Limpa a linha de instrução
-          display.setCursor(0, 40);
-          display.print("Gravacao finalizada");
-          display.setCursor(0, 50);
-          display.print("Aguardando resultado");
-          display.display();
+          oledSetDuasLinhas(OLED_INSTRUCAO, "Gravacao finalizada", "Aguardando resultado");
 
           ChunkAudio chunk;
           while (xQueueReceive(filaAudio, &chunk, 0) == pdTRUE) {
@@ -407,15 +351,8 @@ void tratarMemorizacao() {
 
   if (decorrido >= duracaoMemorizacao) {
     // Tempo acabou: some com a palavra e libera a gravação
-    display.fillRect(0, 15, LARGURA_TELA, 20, SSD1306_BLACK); // apaga a palavra
-    display.setTextSize(2);
-    display.setCursor(0, 15);
-    display.printf("Pronto?");
-    display.setTextSize(1);
-    display.fillRect(0, 40, LARGURA_TELA, 24, SSD1306_BLACK);
-    display.setCursor(0, 40);
-    display.print("Segure B para gravar");
-    display.display();
+    oledSetTexto(OLED_PALAVRA, "Pronto?", 2, true);
+    oledSetTexto(OLED_INSTRUCAO, "Segure B para gravar");
     // Configura o estado inicial do pisca-pisca antes de mudar de estado
     estadoLedPisca = true;
     ultimoPiscaMatriz = millis();
@@ -473,37 +410,20 @@ void setup() {
     for(;;); // Trava o programa se houver erro
   }
 
-  display.clearDisplay();         // Limpa o buffer do display
-  display.setTextColor(WHITE, BLACK);    // Define a cor do texto (Branco)
-  display.drawBitmap(0, 0, bmp_logo_SA, 128, 40, SSD1306_WHITE);
-  display.setTextSize(1);
-  display.setCursor(0, 45);
-  display.print("Conectando WiFi");
-  display.display();              // Atualiza o display com as informações acima
+  oledInit(display);
+  oledMostrarBoot(128, 40, "Conectando WiFi");
 
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  int textPos = 90;
+  String pontos = "";
   while (WiFi.status() != WL_CONNECTED) {
     delay(300);
-    if (textPos + 5 > 105) {
-      textPos = 90;
-      display.setCursor(textPos, 45);
-      display.print("          "); // Limpa os pontos anteriores
-      display.display();
-    }
-    else {
-      display.setCursor(textPos, 45);
-      display.print(".");
-      display.display();
-      textPos += 5;
-    }
+    pontos += ".";
+    if (pontos.length() > 3) pontos = "";
+    // Rodapé é sempre limpo por completo antes de escrever, então os pontos
+    // nunca deixam "resto" na tela, independente de quantos forem
+    oledAtualizarRodapeBoot("Conectando WiFi" + pontos);
   }
-  display.fillRect(0, 45, LARGURA_TELA, 10, SSD1306_BLACK); // Limpa a linha de status
-  display.setCursor(0, 45);
-  display.print("Conectado!");
-  display.setCursor(0, 55);
-  display.printf("IP:%s", WiFi.localIP().toString().c_str());
-  display.display();
+  oledAtualizarRodapeBoot("Conectado!", "IP:" + WiFi.localIP().toString());
 
   i2sInstalar();
 
@@ -526,6 +446,7 @@ void loop() {
   tratarBotaoGravar();
   tratarMemorizacao();
   tratarMatrix();
+  oledTick(); // avança o scroll de textos grandes, se houver algum ativo
 
   ChunkAudio chunk;
   int enviosNestaIteracao = 0;
