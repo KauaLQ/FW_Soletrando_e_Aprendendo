@@ -6,14 +6,18 @@
 #include "modules/buzzer/buzzer.h"
 #include "modules/matrix/matrix.h"
 #include "modules/oled/oled.h"
+#include "modules/wifi_config/wifi_config.h"
 #include <driver/i2s.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/queue.h>
 
 // ---------- Configurações de rede ----------
-const char* WIFI_SSID     = "KAUA_LQ";
-const char* WIFI_PASSWORD = "12345678";
+// Usadas só na primeiríssima vez que o dispositivo liga (antes de qualquer
+// configuração feita pelo portal web). Depois disso, as credenciais reais
+// moram na NVS e são gerenciadas pelo módulo wifi_config.
+const char* WIFI_SSID_PADRAO  = "KAUA_LQ";
+const char* WIFI_SENHA_PADRAO = "12345678";
 const char* WS_HOST       = "192.168.1.107"; // IP do PC rodando backend.py
 const uint16_t WS_PORT    = 8080;
 const char* WS_PATH       = "/";
@@ -68,7 +72,8 @@ int nivelAtual = NIVEL_INICIAL;
 // e reconexão automática não-bloqueante.
 #define INTERVALO_RECONEXAO_WIFI_MS 5000
 #define INTERVALO_PONTOS_WIFI_MS    400
-bool wifiEstavaConectado = true; // true pois o setup() só segue depois de conectar
+bool wifiEstavaConectado = false; // valor real é definido no setup(), após a tentativa de boot
+bool wifiNuncaConectado = false;  // flag que serve para atualizar corretamente o display dentro da função tratarWifi()
 unsigned long ultimaTentativaReconexaoWifi = 0;
 unsigned long ultimoPontoWifi = 0;
 String pontosWifi = "";
@@ -281,8 +286,12 @@ void tratarBotaoPalavra() {
     if (leitura != estadoConfirmadoPalavra) {
       estadoConfirmadoPalavra = leitura;
       if (estadoConfirmadoPalavra == LOW) {
+        if (wifiNuncaConectado) {
+          // Evita que, de alguma forma por bug do webSocket, o buzzer ou o oled
+          // Seja acionado em um momento inconveniente
+        }
         // Verifica, primeiramente, se o server está conectado
-        if(!webSocket.isConnected() || estado == MEMORIZANDO_PALAVRA){
+        else if(!webSocket.isConnected() || estado == MEMORIZANDO_PALAVRA){
           singleNoteBuzzer(NOTE_C4, 300);
           oledSetDuasLinhas(OLED_INSTRUCAO, "Botao indisponivel", "Por favor, aguarde.");
         } 
@@ -315,8 +324,12 @@ void tratarBotaoGravar() {
       estadoConfirmadoGravar = leitura;
       if (estadoConfirmadoGravar == LOW) { // Acabou de PRESSIONAR o botão (Transição para LOW)
         if (!gravando) {
+          if (wifiNuncaConectado) {
+            // Evita que, de alguma forma por bug do webSocket, o buzzer ou o oled
+            // Seja acionado em um momento inconveniente
+          }
           // Verifica, primeiramente, se o server está conectado
-          if(!webSocket.isConnected() || estado == MEMORIZANDO_PALAVRA){
+          else if(!webSocket.isConnected() || estado == MEMORIZANDO_PALAVRA){
             singleNoteBuzzer(NOTE_C4, 300);
             oledSetDuasLinhas(OLED_INSTRUCAO, "Botao indisponivel", "Por favor, aguarde.");
           } else if (estado != PALAVRA_PRONTA) {
@@ -410,18 +423,26 @@ void tratarMatrix(){
 
 // ---------- WiFi: detecta queda e reconecta sozinho, sem travar o loop ----------
 void tratarWifi() {
+  // Credenciais novas acabaram de ser salvas pelo portal web: tenta conectar
+  // com elas imediatamente, em vez de esperar o próximo ciclo de retry.
+  if (wifiConfigConsumirFlagAtualizada()) {
+    WiFi.begin(wifiConfigObterSSID().c_str(), wifiConfigObterSenha().c_str());
+    ultimaTentativaReconexaoWifi = millis();
+  }
+
   bool conectado = (WiFi.status() == WL_CONNECTED);
 
   if (conectado && !wifiEstavaConectado) {
     // Acabou de voltar. O jogo em si só volta a responder quando o
     // webSocket reconectar sozinho (ele já tem retry automático), então só
     // avisamos que o WiFi voltou e deixamos o webSocketEvent cuidar do resto.
+    wifiNuncaConectado = false; // Se ele já conseguiu conectar uma vez, então a tela de boot já pode sair
     wifiEstavaConectado = true;
     oledMostrarMensagemCheia("WiFi reconectado!", "Conectando ao", "servidor...");
     return;
   }
 
-  if (!conectado && wifiEstavaConectado) {
+  if (!conectado && wifiEstavaConectado && !wifiNuncaConectado) {
     // Acabou de cair: reseta o jogo (igual fazemos quando o backend cai) e
     // mostra a tela específica de queda de WiFi.
     wifiEstavaConectado = false;
@@ -435,7 +456,7 @@ void tratarWifi() {
     return;
   }
 
-  if (!conectado) {
+  if (!conectado && !wifiNuncaConectado) {
     // Pontinhos animados de "Reconectando...", só atualiza o corpo da
     // mensagem (nunca redesenha o título), então nunca sobra "lixo" na tela
     // independente de quantos pontos tiverem.
@@ -471,19 +492,36 @@ void setup() {
 
   oledInit(display);
   oledMostrarBoot(128, 40, "Conectando WiFi");
-
+  wifiConfigInit(WIFI_SSID_PADRAO, WIFI_SENHA_PADRAO); // Sobe o AP fixo + portal de configuração
   WiFi.setAutoReconnect(true); // ajuda o próprio driver a já tentar sozinho
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  WiFi.begin(wifiConfigObterSSID().c_str(), wifiConfigObterSenha().c_str());
+
   String pontos = "";
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(300);
-    pontos += ".";
-    if (pontos.length() > 3) pontos = "";
-    // Rodapé é sempre limpo por completo antes de escrever, então os pontos
-    // nunca deixam "resto" na tela, independente de quantos forem
-    oledAtualizarRodapeBoot("Conectando WiFi" + pontos);
+  unsigned long ultimoPontoBoot = millis();
+  unsigned long inicioTentativaWifi = millis();
+  const unsigned long TIMEOUT_WIFI_BOOT_MS = 20000; // não trava pra sempre se as credenciais estiverem erradas
+
+  while (WiFi.status() != WL_CONNECTED && millis() - inicioTentativaWifi < TIMEOUT_WIFI_BOOT_MS) {
+    wifiConfigTick(); // mantém o portal respondendo mesmo durante essa espera
+    if (millis() - ultimoPontoBoot >= 300) {
+      ultimoPontoBoot = millis();
+      pontos += ".";
+      if (pontos.length() > 3) pontos = "";
+      // Rodapé é sempre limpo por completo antes de escrever, então os pontos
+      // nunca deixam "resto" na tela, independente de quantos forem
+      oledAtualizarRodapeBoot("Conectando WiFi" + pontos);
+    }
+    delay(10); // laço curto só pra não saturar a CPU enquanto atende o portal
   }
-  oledAtualizarRodapeBoot("Conectado!", "IP:" + WiFi.localIP().toString());
+
+  if (WiFi.status() == WL_CONNECTED) {
+    oledAtualizarRodapeBoot("Conectado!", "IP:" + WiFi.localIP().toString());
+  } else {
+    // Não conectou dentro do tempo
+    wifiNuncaConectado = true;
+    oledAtualizarRodapeBoot("Sem WiFi ainda", "Config: " + wifiConfigObterIPPortal().toString());
+  }
+  wifiEstavaConectado = (WiFi.status() == WL_CONNECTED);
 
   i2sInstalar();
 
@@ -507,6 +545,7 @@ void loop() {
   tratarMemorizacao();
   tratarMatrix();
   tratarWifi();
+  wifiConfigTick(); // atende requisições da página de configuração de WiFi
   oledTick(); // avança o scroll de textos grandes, se houver algum ativo
 
   ChunkAudio chunk;

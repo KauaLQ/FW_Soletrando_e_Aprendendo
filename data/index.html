@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Configurar WiFi</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: linear-gradient(180deg, #0d47a1, #1976d2);
+  }
+  .cartao {
+    width: 100%;
+    max-width: 360px;
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 28px 24px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .25);
+  }
+  h1 {
+    margin: 0 0 4px;
+    font-size: 22px;
+    color: #0d47a1;
+    text-align: center;
+  }
+  p.subtitulo {
+    margin: 0 0 24px;
+    font-size: 14px;
+    color: #5f6b7a;
+    text-align: center;
+  }
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1565c0;
+    margin-bottom: 6px;
+  }
+  input[type=text], input[type=password] {
+    width: 100%;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+    border: 2px solid #bbdefb;
+    border-radius: 12px;
+    font-size: 16px;
+    color: #0d1b2a;
+    background: #f4f9ff;
+  }
+  input:focus {
+    outline: none;
+    border-color: #1976d2;
+  }
+  .mostrar-senha {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #5f6b7a;
+    margin: -8px 0 20px;
+  }
+  .mostrar-senha input { width: auto; margin: 0; }
+  .mostrar-senha label { margin: 0; font-weight: normal; color: #5f6b7a; }
+  button {
+    width: 100%;
+    padding: 15px;
+    border: none;
+    border-radius: 12px;
+    background: #1565c0;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:active { background: #0d47a1; }
+  .rodape {
+    margin-top: 18px;
+    font-size: 12px;
+    color: #90a4b8;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+  <div class="cartao">
+    <h1>Configurar WiFi</h1>
+    <p class="subtitulo">Informe a rede que o dispositivo deve usar</p>
+
+    <form method="POST" action="/salvar">
+      <label for="ssid">Nome da rede (SSID)</label>
+      <input type="text" id="ssid" name="ssid" placeholder="Carregando..." autocomplete="off" required>
+
+      <label for="senha">Senha</label>
+      <input type="password" id="senha" name="senha" placeholder="Senha da rede" autocomplete="off">
+
+      <div class="mostrar-senha">
+        <input type="checkbox" id="mostrar" onclick="document.getElementById('senha').type = this.checked ? 'text' : 'password'">
+        <label for="mostrar">Mostrar senha</label>
+      </div>
+
+      <button type="submit">Salvar e conectar</button>
+    </form>
+
+    <p class="rodape">Esta pagina continua disponivel em 192.168.4.1</p>
+  </div>
+
+  <script>
+    // Pré-preenche o campo com o SSID atualmente salvo, se houver
+    fetch('/ssid-atual')
+      .then(function (r) { return r.text(); })
+      .then(function (ssid) {
+        var campo = document.getElementById('ssid');
+        if (ssid) campo.value = ssid;
+      })
+      .catch(function () {});
+  </script>
+</body>
+</html>
