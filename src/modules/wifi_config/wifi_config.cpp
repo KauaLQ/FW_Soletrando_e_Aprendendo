@@ -15,7 +15,7 @@ static const IPAddress AP_MASCARA(255, 255, 255, 0);
 
 static Preferences prefs;
 static WebServer server(80);
-static volatile bool credenciaisAtualizadas = false;
+static volatile uint32_t versaoCredenciais = 0;
 
 // ---------- Páginas geradas dinamicamente ----------
 static String paginaSalvo(const String &ssid) {
@@ -53,16 +53,16 @@ static void tratarSalvar() {
   String ssid = server.arg("ssid");
   String senha = server.arg("senha");
   ssid.trim();
-
+ 
   if (ssid.length() == 0) {
     server.send(400, "text/plain", "SSID nao pode ser vazio");
     return;
   }
-
+ 
   prefs.putString("ssid", ssid);
   prefs.putString("pass", senha);
-  credenciaisAtualizadas = true;
-
+  versaoCredenciais++;
+ 
   server.send(200, "text/html", paginaSalvo(ssid));
 }
 
@@ -112,15 +112,9 @@ String wifiConfigObterSenha() {
   return prefs.getString("pass", "");
 }
 
-// true só na primeira checagem logo após o usuário salvar novas credenciais
-// pela página web (o main.cpp usa isso pra saber a hora de tentar conectar
-// com elas). Consome (zera) a flag ao ser chamada.
-bool wifiConfigConsumirFlagAtualizada() {
-  if (credenciaisAtualizadas) {
-    credenciaisAtualizadas = false;
-    return true;
-  }
-  return false;
+// Número de versão das credenciais salvas. incrementa a cada alteração pela página web.
+uint32_t wifiConfigObterVersao() {
+  return versaoCredenciais;
 }
 
 // IP do Access Point de configuração, pra mostrar na tela/logs

@@ -7,7 +7,7 @@ void wifiConfigInit(const String &ssidPadrao, const String &senhaPadrao);
 void wifiConfigTick();
 String wifiConfigObterSSID();
 String wifiConfigObterSenha();
-bool wifiConfigConsumirFlagAtualizada();
+uint32_t wifiConfigObterVersao();
 IPAddress wifiConfigObterIPPortal();
 
 #endif

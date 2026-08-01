@@ -7,6 +7,7 @@
 #include "modules/matrix/matrix.h"
 #include "modules/oled/oled.h"
 #include "modules/wifi_config/wifi_config.h"
+#include "modules/menu/menu.h"
 #include <driver/i2s.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -18,7 +19,7 @@
 // moram na NVS e são gerenciadas pelo módulo wifi_config.
 const char* WIFI_SSID_PADRAO  = "KAUA_LQ";
 const char* WIFI_SENHA_PADRAO = "12345678";
-const char* WS_HOST       = "192.168.1.107"; // IP do PC rodando backend.py
+const char* WS_HOST       = "192.168.1.106"; // IP do PC rodando backend.py
 const uint16_t WS_PORT    = 8080;
 const char* WS_PATH       = "/";
 
@@ -48,6 +49,8 @@ bool estadoLedPisca = true;
 // ---------- Botões ----------
 #define BUTTON_GRAVAR_PIN    35   // grava o áudio (só liberado com palavra pronta)
 #define BUTTON_PALAVRA_PIN   34   // pede uma nova palavra ao backend
+#define BUTTON_CONFIG_PIN    36   // abre o menu de configurações / navega para CIMA dentro dele
+#define BUTTON_CANCEL_PIN    39   // só tem ação dentro do menu: VOLTAR / SAIR
 #define DEBOUNCE_MS          30
 
 // ---------- Áudio ----------
@@ -95,7 +98,8 @@ enum EstadoJogo {
   MEMORIZANDO_PALAVRA,          // palavra na tela, contando tempo pra decorar
   PALAVRA_PRONTA,               // tempo acabou, IO35 liberado pra gravar
   GRAVANDO,                     // gravando áudio agora
-  AGUARDANDO_RESULTADO          // já mandamos stop_audio, esperando feedback
+  AGUARDANDO_RESULTADO,         // já mandamos stop_audio, esperando feedback
+  CONFIGURACAO                  // usuário navegando o menu de config. tem prioridade sobre qualquer outra tela
 };
 
 volatile EstadoJogo estado = AGUARDANDO_PEDIDO_PALAVRA;
@@ -109,6 +113,14 @@ unsigned long lastDebounceGravarTime = 0;
 volatile bool estadoConfirmadoPalavra = HIGH;
 bool lastPalavraState = HIGH;
 unsigned long lastDebouncePalavraTime = 0;
+
+volatile bool estadoConfirmadoConfig = HIGH;
+bool lastConfigState = HIGH;
+unsigned long lastDebounceConfigTime = 0;
+
+volatile bool estadoConfirmadoCancel = HIGH;
+bool lastCancelState = HIGH;
+unsigned long lastDebounceCancelTime = 0;
 
 // ---------- Tempo de memorização por nível (ms) ----------
 #define TEMPO_MEMORIZACAO_NIVEL1 10000
@@ -202,13 +214,21 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
     case WStype_CONNECTED:
       matrixStartAnimation(MATRIX_ANIM_ARROW, matrix);
       startBuzzerSong(1);  // Inicia a música uma vez
-      oledMostrarMensagemCheia("Conectado ao backend", "Aperte A para", "Iniciar/Continuar");
+      if (estado != CONFIGURACAO) {
+        oledMostrarMensagemCheia("Conectado ao backend", "Aperte A para", "Iniciar/Continuar");
+      }
       break;
     case WStype_DISCONNECTED:
-      estado = AGUARDANDO_PEDIDO_PALAVRA;   // reseta a máquina de estados para evitar que o jogo fique travado em um "estado fantasma"
+      // Se o usuário estiver no menu de configurações, essa tela tem
+      // prioridade: não reseta o estado do jogo nem desenha por cima dela.
+      // A reconexão do backend continua acontecendo normalmente por trás;
+      // quando o jogador sair do menu, ele já encontra tudo em dia.
+      if (estado != CONFIGURACAO) {
+        estado = AGUARDANDO_PEDIDO_PALAVRA; // reseta a máquina de estados para evitar que o jogo fique travado em um "estado fantasma"
+      }
       singleNoteBuzzer(REST, 100);          // Desliga o buzzer a qualquer custo
       matrixClear(matrix);                  // Apaga a matriz ao perder a conexão com o backend
-      if (WiFi.status() == WL_CONNECTED) {  // Se o WiFi também caiu, a tela específica de WiFi já está sendo exibida
+      if (WiFi.status() == WL_CONNECTED && estado != CONFIGURACAO) {  // Se o WiFi também caiu, a tela específica de WiFi já está sendo exibida
         oledMostrarMensagemCheia("Aguardando backend");
       }
       break;
@@ -261,7 +281,9 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
           break;
 
         default:
-          oledSetTexto(OLED_PALAVRA, "ERRO", 2, true);
+          if (estado != CONFIGURACAO) {
+            oledSetTexto(OLED_PALAVRA, "ERRO", 2, true);
+          }
           // Debug: mostra a resposta do backend no console. Descomente caso necessário.
           // Serial.printf("[WS] Resposta inesperada (estado atual nao esperava texto): %s\n", resposta.c_str());
           break;
@@ -271,6 +293,16 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
     default:
       break;
   }
+}
+
+// Tela padrão de "esperando o jogador pedir uma palavra". Usada ao sair do
+// menu de configurações, já que a tela do menu ocupa a tela inteira e some
+// com o que estava desenhado antes.
+void mostrarTelaAguardandoPedido() {
+  oledIniciarTelaJogo();
+  oledSetTexto(OLED_STATUS, "Nivel " + String(nivelAtual));
+  oledSetTexto(OLED_PALAVRA, "Pronto?", 2, true);
+  oledSetTexto(OLED_INSTRUCAO, "Aperte A para pedir");
 }
 
 // ---------- Botão de pedir palavra (IO34) ----------
@@ -286,7 +318,10 @@ void tratarBotaoPalavra() {
     if (leitura != estadoConfirmadoPalavra) {
       estadoConfirmadoPalavra = leitura;
       if (estadoConfirmadoPalavra == LOW) {
-        if (wifiNuncaConectado) {
+        if (estado == CONFIGURACAO) {
+          menuNavegarBaixo();
+        }
+        else if (wifiNuncaConectado) {
           // Evita que, de alguma forma por bug do webSocket, o buzzer ou o oled
           // Seja acionado em um momento inconveniente
         }
@@ -324,7 +359,10 @@ void tratarBotaoGravar() {
       estadoConfirmadoGravar = leitura;
       if (estadoConfirmadoGravar == LOW) { // Acabou de PRESSIONAR o botão (Transição para LOW)
         if (!gravando) {
-          if (wifiNuncaConectado) {
+          if (estado == CONFIGURACAO) {
+            menuSelecionar();
+          }
+          else if (wifiNuncaConectado) {
             // Evita que, de alguma forma por bug do webSocket, o buzzer ou o oled
             // Seja acionado em um momento inconveniente
           }
@@ -367,6 +405,49 @@ void tratarBotaoGravar() {
     }
   }
   lastGravarState = leitura;
+}
+
+// ---------- Botão de menu (IO36): abre o menu / navega para CIMA dentro dele ----------
+void tratarBotaoConfig() {
+  bool leitura = digitalRead(BUTTON_CONFIG_PIN);
+  if (leitura != lastConfigState) {
+    lastDebounceConfigTime = millis();
+  }
+  if ((millis() - lastDebounceConfigTime) > DEBOUNCE_MS) {
+    if (leitura != estadoConfirmadoConfig) {
+      estadoConfirmadoConfig = leitura;
+      if (estadoConfirmadoConfig == LOW) {
+        if (estado == CONFIGURACAO) {
+          menuNavegarCima();
+        } else if (estado == AGUARDANDO_PEDIDO_PALAVRA) {
+          // Só pode abrir o menu se não houver nada em andamento (regra de entrada)
+          estado = CONFIGURACAO;
+          menuEntrar();
+        }
+        // Em qualquer outro estado, o botão CONFIG simplesmente não faz nada
+      }
+    }
+  }
+  lastConfigState = leitura;
+}
+
+// ---------- Botão de cancelar (IO39): só tem ação dentro do menu ----------
+void tratarBotaoCancel() {
+  bool leitura = digitalRead(BUTTON_CANCEL_PIN);
+  if (leitura != lastCancelState) {
+    lastDebounceCancelTime = millis();
+  }
+  if ((millis() - lastDebounceCancelTime) > DEBOUNCE_MS) {
+    if (leitura != estadoConfirmadoCancel) {
+      estadoConfirmadoCancel = leitura;
+      if (estadoConfirmadoCancel == LOW && estado == CONFIGURACAO) {
+        estado = AGUARDANDO_PEDIDO_PALAVRA;
+        mostrarTelaAguardandoPedido();
+      }
+      // Fora do menu, CANCEL não tem ação nenhuma
+    }
+  }
+  lastCancelState = leitura;
 }
 
 // ---------- Timer de memorização (IO35 continua bloqueado aqui) ----------
@@ -425,7 +506,10 @@ void tratarMatrix(){
 void tratarWifi() {
   // Credenciais novas acabaram de ser salvas pelo portal web: tenta conectar
   // com elas imediatamente, em vez de esperar o próximo ciclo de retry.
-  if (wifiConfigConsumirFlagAtualizada()) {
+  static uint32_t ultimaVersaoWifiVista = 0;
+  uint32_t versaoAtual = wifiConfigObterVersao();
+  if (versaoAtual != ultimaVersaoWifiVista) {
+    ultimaVersaoWifiVista = versaoAtual;
     WiFi.begin(wifiConfigObterSSID().c_str(), wifiConfigObterSenha().c_str());
     ultimaTentativaReconexaoWifi = millis();
   }
@@ -438,33 +522,41 @@ void tratarWifi() {
     // avisamos que o WiFi voltou e deixamos o webSocketEvent cuidar do resto.
     wifiNuncaConectado = false; // Se ele já conseguiu conectar uma vez, então a tela de boot já pode sair
     wifiEstavaConectado = true;
-    oledMostrarMensagemCheia("WiFi reconectado!", "Conectando ao", "servidor...");
+    if (estado != CONFIGURACAO) {
+      oledMostrarMensagemCheia("WiFi reconectado!", "Conectando ao", "servidor...");
+    }
     return;
   }
 
   if (!conectado && wifiEstavaConectado && !wifiNuncaConectado) {
     // Acabou de cair: reseta o jogo (igual fazemos quando o backend cai) e
-    // mostra a tela específica de queda de WiFi.
+    // mostra a tela específica de queda de WiFi (a menos que o usuário
+    // esteja no menu de config, que tem prioridade sobre essa tela).
     wifiEstavaConectado = false;
-    estado = AGUARDANDO_PEDIDO_PALAVRA;
+    if (estado != CONFIGURACAO) {
+      estado = AGUARDANDO_PEDIDO_PALAVRA;
+    }
     singleNoteBuzzer(REST, 100);
     matrixClear(matrix);
     pontosWifi = "";
     ultimoPontoWifi = millis();
     ultimaTentativaReconexaoWifi = millis();
-    oledMostrarMensagemCheia("WiFi desconectado", "Reconectando");
+    if (estado != CONFIGURACAO) {
+      oledMostrarMensagemCheia("WiFi desconectado", "Reconectando");
+    }
     return;
   }
 
   if (!conectado && !wifiNuncaConectado) {
     // Pontinhos animados de "Reconectando...", só atualiza o corpo da
     // mensagem (nunca redesenha o título), então nunca sobra "lixo" na tela
-    // independente de quantos pontos tiverem.
     if (millis() - ultimoPontoWifi >= INTERVALO_PONTOS_WIFI_MS) {
       ultimoPontoWifi = millis();
       pontosWifi += ".";
       if (pontosWifi.length() > 3) pontosWifi = "";
-      oledAtualizarCorpoMensagemCheia("Reconectando" + pontosWifi);
+      if (estado != CONFIGURACAO) {
+        oledAtualizarCorpoMensagemCheia("Reconectando" + pontosWifi);
+      }
     }
 
     // Tenta reconectar periodicamente, sem bloquear o resto do loop
@@ -480,6 +572,8 @@ void setup() {
   Serial.begin(115200);
   pinMode(BUTTON_GRAVAR_PIN, INPUT);
   pinMode(BUTTON_PALAVRA_PIN, INPUT);
+  pinMode(BUTTON_CONFIG_PIN, INPUT);
+  pinMode(BUTTON_CANCEL_PIN, INPUT);
 
   // Inicializa o barramento SPI com os pinos customizados do ESP32 (HSPI) e a Matriz LED
   hspi.begin(CLK_PIN, -1, DATA_PIN, CS_PIN); // SCK, MISO (não usado), MOSI, SS
@@ -542,10 +636,15 @@ void loop() {
   updateBuzzerTick(); // Atualiza o buzzer (essencial rodar o tempo todo livremente)
   tratarBotaoPalavra();
   tratarBotaoGravar();
+  tratarBotaoConfig();
+  tratarBotaoCancel();
   tratarMemorizacao();
   tratarMatrix();
   tratarWifi();
   wifiConfigTick(); // atende requisições da página de configuração de WiFi
+  if (estado == CONFIGURACAO) {
+    menuTick(); // detecta mudanças (ex.: WiFi reconfigurado) e redesenha a tela do menu na hora
+  }
   oledTick(); // avança o scroll de textos grandes, se houver algum ativo
 
   ChunkAudio chunk;
