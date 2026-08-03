@@ -1,6 +1,13 @@
 #include "menu.h"
 #include "../oled/oled.h"
 #include "../wifi_config/wifi_config.h"
+#include "../buzzer/buzzer.h"
+
+// O nível do jogo pertence ao estado do jogo, que mora no main.cpp, essas
+// duas funções são implementadas lá (perto de nivelAtual/NIVEL_MAXIMO) e só
+// expõem o necessário aqui, sem vazar a variável bruta pro menu.
+extern int obterNivelAtual();
+extern void avancarNivelCiclico();
 
 // ---------- Item: Informações de WiFi ----------
 static void renderizarInfoWifi() {
@@ -11,7 +18,37 @@ static void renderizarInfoWifi() {
   oledSetDuasLinhas(OLED_PALAVRA, "SSID: " + ssid, "Pass: " + senha);
 
   String ip = wifiConfigObterIPPortal().toString();
-  oledSetDuasLinhas(OLED_INSTRUCAO, "Acesse " + ip, "p/ alterar   ^ v");
+  oledSetTexto(OLED_INSTRUCAO, "Conecte: ESP32-Config - Senha: config1234 - IP: " + ip, 1, false);
+}
+
+// ---------- Item: Efeitos sonoros (silenciar/ativar o buzzer) ----------
+static void renderizarEfeitosSonoros() {
+  bool mudo = buzzerEstaMudo();
+  oledMostrarIconeAudio(mudo);
+ 
+  // A opção destacada com [colchetes] sempre reflete o estado atual do som:
+  // "Sim" em destaque = efeitos ativos, "Nao" em destaque = efeitos mudos.
+  // Apertar B alterna o estado (não há navegação entre Sim/Nao aqui).
+  String linha2 = mudo ? "  Sim   [Nao]" : " [Sim]   Nao";
+  oledSetDuasLinhas(OLED_INSTRUCAO, "Silenciar efeitos?", linha2);
+}
+ 
+static void selecionarEfeitosSonoros() {
+  if (buzzerEstaMudo()) {
+    buzzerDesmutar();
+  } else {
+    buzzerMutar();
+  }
+}
+ 
+// ---------- Item: Alterar nível do jogo ----------
+static void renderizarNivel() {
+  oledSetTexto(OLED_PALAVRA, "Nivel: " + String(obterNivelAtual()), 2, true);
+  oledSetTexto(OLED_INSTRUCAO, "Pressione B para mudar o nivel");
+}
+ 
+static void selecionarNivel() {
+  avancarNivelCiclico();
 }
 
 // ---------- Lista de itens do menu ----------
@@ -26,6 +63,8 @@ struct ItemMenu {
 // acima, e acrescente uma linha aqui. Nada mais precisa mudar.
 static const ItemMenu ITENS_MENU[] = {
   { "Config WiFi", renderizarInfoWifi, nullptr },
+  { "Efeitos Sonoros", renderizarEfeitosSonoros, selecionarEfeitosSonoros },
+  { "Alterar nivel do jogo", renderizarNivel, selecionarNivel }
 };
 static const int NUM_ITENS_MENU = sizeof(ITENS_MENU) / sizeof(ITENS_MENU[0]);
 
@@ -60,6 +99,7 @@ void menuNavegarBaixo() {
 void menuSelecionar() {
   if (ITENS_MENU[indiceAtual].selecionar != nullptr) {
     ITENS_MENU[indiceAtual].selecionar();
+    desenharItemAtual(); // reflete o efeito da seleção na tela imediatamente
   }
 }
 

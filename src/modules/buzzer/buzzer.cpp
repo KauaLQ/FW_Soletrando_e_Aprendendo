@@ -4,6 +4,7 @@
 static int thisNote = 0;
 static unsigned long previousMillis = 0;
 static unsigned long targetDuration = 0;
+static bool mudo = false; // controle de silenciar/ativar os efeitos sonoros (menu de configurações)
 
 enum SongState { PLAYING_NOTE, PAUSE_BETWEEN_NOTES, PLAYING_SINGLE_NOTE, SONG_FINISHED };
 static SongState currentState = SONG_FINISHED; 
@@ -22,7 +23,24 @@ void initBuzzer() {
     ledcAttachPin(BUZZER_PIN, PWM_CHANEL);
 }
 
+// ----------- Controle de mudo -----------
+void buzzerMutar() {
+    mudo = true;
+    ledcWriteTone(PWM_CHANEL, 0); // corta qualquer som que esteja tocando agora
+    currentState = SONG_FINISHED; // e encerra a "melodia"/nota em andamento
+}
+
+void buzzerDesmutar() {
+    mudo = false;
+}
+
+bool buzzerEstaMudo() {
+    return mudo;
+}
+
 void singleNoteBuzzer(int frequency, unsigned long durationMs) {
+    if (mudo) return; // efeitos sonoros desativados: ignora o pedido silenciosamente
+
     if (frequency != REST) {
         ledcWriteTone(PWM_CHANEL, frequency);
     } else {
@@ -36,6 +54,8 @@ void singleNoteBuzzer(int frequency, unsigned long durationMs) {
 
 // Dispara o início da música baseado no ID informado
 void startBuzzerSong(uint8_t number_melody) {
+    if (mudo) return; // efeitos sonoros desativados: ignora o pedido silenciosamente
+
     int tempo = 0;
     int arraySize = 0;
 

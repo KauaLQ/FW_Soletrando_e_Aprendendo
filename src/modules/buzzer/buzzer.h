@@ -9,6 +9,10 @@
 #define BUZZER_PIN 18
 
 void initBuzzer();
+// Controle de mudo dos efeitos sonoros (usado pelo menu de configurações)
+void buzzerMutar();
+void buzzerDesmutar();
+bool buzzerEstaMudo();
 void startBuzzerSong(uint8_t number_melody);                        // Dispara o início da música (chamado uma vez)
 void singleNoteBuzzer(int frequency, unsigned long durationMs);     // Toca Nota isolada
 void updateBuzzerTick();                                            // Atualiza a máquina de estados (chamado no loop)

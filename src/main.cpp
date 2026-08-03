@@ -19,7 +19,7 @@
 // moram na NVS e são gerenciadas pelo módulo wifi_config.
 const char* WIFI_SSID_PADRAO  = "KAUA_LQ";
 const char* WIFI_SENHA_PADRAO = "12345678";
-const char* WS_HOST       = "192.168.1.106"; // IP do PC rodando backend.py
+const char* WS_HOST       = "192.168.1.105"; // IP do PC rodando backend.py
 const uint16_t WS_PORT    = 8080;
 const char* WS_PATH       = "/";
 
@@ -68,6 +68,16 @@ bool estadoLedPisca = true;
 #define NIVEL_INICIAL 1
 #define NIVEL_MAXIMO  3
 int nivelAtual = NIVEL_INICIAL;
+
+// Usadas pelo menu de configurações (item "Alterar nivel do jogo")
+int obterNivelAtual() {
+  return nivelAtual;
+}
+ 
+void avancarNivelCiclico() {
+  nivelAtual++;
+  if (nivelAtual > NIVEL_MAXIMO) nivelAtual = NIVEL_INICIAL;
+}
 
 // ---------- Estado da conexão WiFi (independente da conexão com o backend) ----------
 // A queda do backend (WStype_DISCONNECTED) já é tratada pelo webSocketEvent.
@@ -319,6 +329,7 @@ void tratarBotaoPalavra() {
       estadoConfirmadoPalavra = leitura;
       if (estadoConfirmadoPalavra == LOW) {
         if (estado == CONFIGURACAO) {
+          singleNoteBuzzer(NOTE_D5, 300);
           menuNavegarBaixo();
         }
         else if (wifiNuncaConectado) {
@@ -360,6 +371,7 @@ void tratarBotaoGravar() {
       if (estadoConfirmadoGravar == LOW) { // Acabou de PRESSIONAR o botão (Transição para LOW)
         if (!gravando) {
           if (estado == CONFIGURACAO) {
+            singleNoteBuzzer(NOTE_E5, 300);
             menuSelecionar();
           }
           else if (wifiNuncaConectado) {
@@ -418,10 +430,12 @@ void tratarBotaoConfig() {
       estadoConfirmadoConfig = leitura;
       if (estadoConfirmadoConfig == LOW) {
         if (estado == CONFIGURACAO) {
+          singleNoteBuzzer(NOTE_D5, 300);
           menuNavegarCima();
         } else if (estado == AGUARDANDO_PEDIDO_PALAVRA) {
           // Só pode abrir o menu se não houver nada em andamento (regra de entrada)
           estado = CONFIGURACAO;
+          singleNoteBuzzer(NOTE_G3, 300);
           menuEntrar();
         }
         // Em qualquer outro estado, o botão CONFIG simplesmente não faz nada
@@ -442,6 +456,7 @@ void tratarBotaoCancel() {
       estadoConfirmadoCancel = leitura;
       if (estadoConfirmadoCancel == LOW && estado == CONFIGURACAO) {
         estado = AGUARDANDO_PEDIDO_PALAVRA;
+        singleNoteBuzzer(NOTE_G3, 300);
         mostrarTelaAguardandoPedido();
       }
       // Fora do menu, CANCEL não tem ação nenhuma

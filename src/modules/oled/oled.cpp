@@ -221,6 +221,32 @@ void oledAtualizarRodapeBoot(const String &rodape1, const String &rodape2) {
   tela->display();
 }
 
+// Ícone de áudio (ativo/mudo), desenhado com formas geométricas simples
+void oledMostrarIconeAudio(bool mudo) {
+  const RetanguloRegiao &r = REGIOES[OLED_PALAVRA];
+  pararScroll(OLED_PALAVRA);
+  limparRetangulo(r);
+
+  int16_t cx = r.x + r.w / 2;
+  int16_t cy = r.y + r.h / 2;
+
+  // Corpo do alto-falante (bobina + cone), igual nos dois estados
+  tela->fillRect(cx - 16, cy - 3, 6, 7, SSD1306_WHITE);
+  tela->fillTriangle(cx - 11, cy, cx - 3, cy - 7, cx - 3, cy + 7, SSD1306_WHITE);
+
+  if (mudo) {
+    // "X" no lugar das ondas sonoras -- símbolo universal de mudo
+    tela->drawLine(cx - 1, cy - 7, cx + 9, cy + 7, SSD1306_WHITE);
+    tela->drawLine(cx - 1, cy + 7, cx + 9, cy - 7, SSD1306_WHITE);
+  } else {
+    // Duas ondas sonoras (metade direita de dois círculos concêntricos)
+    tela->drawCircleHelper(cx - 3, cy, 4, 0x6, SSD1306_WHITE);
+    tela->drawCircleHelper(cx - 3, cy, 8, 0x6, SSD1306_WHITE);
+  }
+
+  tela->display();
+}
+
 // Limpa a tela inteira
 void oledLimparTudo() {
   zerarTodosScrolls();

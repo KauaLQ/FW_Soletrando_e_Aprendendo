@@ -25,6 +25,7 @@ void oledMostrarMensagemCheia(const String &titulo, const String &linha1 = "", c
 void oledAtualizarCorpoMensagemCheia(const String &linha1, const String &linha2 = "");
 void oledMostrarBoot(int16_t largura, int16_t altura, const String &rodape1, const String &rodape2 = "");
 void oledAtualizarRodapeBoot(const String &rodape1, const String &rodape2 = "");
+void oledMostrarIconeAudio(bool mudo);
 void oledLimparTudo();
 
 #endif
