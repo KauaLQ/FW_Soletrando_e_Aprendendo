@@ -51,6 +51,34 @@ static void selecionarNivel() {
   avancarNivelCiclico();
 }
 
+// ---------- Item: Parear Seção ----------
+static String pinPareamentoAtual = "----"; // PIN inicial antes da primeira geração
+
+// Retorna o PIN atual para ser consultado/enviado via WebSocket ou API
+String menuObterPinPareamento() {
+  if (pinPareamentoAtual == "----") {
+    // Se ainda não gerou nenhum, gera um PIN na primeira consulta
+    int pin = random(0, 10000);
+    char buffer[5];
+    snprintf(buffer, sizeof(buffer), "%04d", pin);
+    pinPareamentoAtual = String(buffer);
+  }
+  return pinPareamentoAtual;
+}
+
+static void renderizarParearSecao() {
+  oledSetTexto(OLED_PALAVRA, pinPareamentoAtual, 2, true);
+  oledSetTexto(OLED_INSTRUCAO, "Pressione B para gerar novo PIN");
+}
+
+static void selecionarParearSecao() {
+  // Gera número aleatório de 0 a 9999 e formata com zeros à esquerda (%04d)
+  int pin = random(0, 10000);
+  char buffer[5];
+  snprintf(buffer, sizeof(buffer), "%04d", pin);
+  pinPareamentoAtual = String(buffer);
+}
+
 // ---------- Lista de itens do menu ----------
 struct ItemMenu {
   const char *titulo;    // vai pro OLED_STATUS
@@ -64,7 +92,8 @@ struct ItemMenu {
 static const ItemMenu ITENS_MENU[] = {
   { "Config WiFi", renderizarInfoWifi, nullptr },
   { "Efeitos Sonoros", renderizarEfeitosSonoros, selecionarEfeitosSonoros },
-  { "Alterar nivel do jogo", renderizarNivel, selecionarNivel }
+  { "Alterar nivel do jogo", renderizarNivel, selecionarNivel },
+  { "Parear servidor", renderizarParearSecao, selecionarParearSecao }
 };
 static const int NUM_ITENS_MENU = sizeof(ITENS_MENU) / sizeof(ITENS_MENU[0]);
 

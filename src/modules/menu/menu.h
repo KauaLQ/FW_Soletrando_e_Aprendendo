@@ -12,6 +12,9 @@ void menuNavegarCima();
 void menuNavegarBaixo();
 void menuSelecionar();
 
+// Função utilitária pra obter o PIN de pareamento atual, que é exibido no menu
+String menuObterPinPareamento();
+
 // Chame sempre no loop(), mas só enquanto estado == CONFIGURACAO. Detecta se
 // algo que o item atual exibe mudou por fora (ex.: SSID alterado pelo portal
 // web) e redesenha a tela na hora, sem precisar de nenhuma ação do usuário.

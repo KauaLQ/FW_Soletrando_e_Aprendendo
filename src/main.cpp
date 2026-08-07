@@ -19,7 +19,7 @@
 // moram na NVS e são gerenciadas pelo módulo wifi_config.
 const char* WIFI_SSID_PADRAO  = "KAUA_LQ";
 const char* WIFI_SENHA_PADRAO = "12345678";
-const char* WS_HOST       = "192.168.1.105"; // IP do PC rodando backend.py
+const char* WS_HOST       = "192.168.1.101"; // IP do PC rodando backend.py
 const uint16_t WS_PORT    = 8080;
 const char* WS_PATH       = "/";
 
@@ -632,10 +632,11 @@ void setup() {
   }
   wifiEstavaConectado = (WiFi.status() == WL_CONNECTED);
 
+  // Inicializa o gerador de números aleatórios com ruído analógico de um pino desconectado
+  randomSeed(analogRead(26) + micros());
+
   i2sInstalar();
-
   filaAudio = xQueueCreate(FILA_TAMANHO, sizeof(ChunkAudio));
-
   xTaskCreatePinnedToCore(tarefaCapturaAudio, "CapturaAudio", 4096, NULL, 2, &tarefaCapturaHandle, 0);
 
   webSocket.begin(WS_HOST, WS_PORT, WS_PATH);
