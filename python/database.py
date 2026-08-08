@@ -12,26 +12,24 @@ ENV_PATH = BASE_DIR / ".env"
 load_dotenv(dotenv_path=ENV_PATH)
 
 # ---------- String de conexão ----------
-# Pode ser sobrescrita por variável de ambiente (recomendado em produção).
-# Formato: postgresql://usuario:senha@host:porta/nome_do_banco
 DB_URL = os.getenv("DB_URL")
 
-# Validação para evitar erros silenciosos
 if not DB_URL:
     raise ValueError(f"A variável DB_URL não foi encontrada. Verifique se o arquivo existe em: {ENV_PATH}")
 
-# echo=False evita poluir o console com o SQL gerado; troque para True se
-# precisar debugar as queries.
 engine = create_engine(DB_URL, echo=False)
-
 
 def criar_tabelas():
     """Cria todas as tabelas que ainda não existem no banco."""
     SQLModel.metadata.create_all(engine)
 
-def obter_sessao() -> Session:
-    """Retorna uma nova sessão do banco (usar com 'with')."""
-    return Session(engine)
+def obter_sessao():
+    """
+    Dependency do FastAPI (Depends(obter_sessao)): entrega uma Session e
+    garante o fechamento no final da requisição, mesmo se der exceção.
+    """
+    with Session(engine) as sessao:
+        yield sessao
 
 if __name__ == "__main__":
     # python3 database.py -> cria as tabelas manualmente

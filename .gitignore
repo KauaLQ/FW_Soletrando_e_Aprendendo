@@ -6,3 +6,5 @@
 python/*.wav
 .env
 python/__pycache__/*
+python/routers/__pycache__/*
+audios/*

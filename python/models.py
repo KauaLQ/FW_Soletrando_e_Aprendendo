@@ -36,6 +36,7 @@ class Aluno(SQLModel, table=True):
 
     turma: Optional[Turma] = Relationship(back_populates="alunos")
     sessoes: List["Sessao"] = Relationship(back_populates="aluno")
+    pareamentos: List["Pareamento"] = Relationship(back_populates="aluno")
 
 # ---------- Sessoes ----------
 class Sessao(SQLModel, table=True):
@@ -45,8 +46,7 @@ class Sessao(SQLModel, table=True):
     aluno_id: int = Field(foreign_key="alunos.id")
     data_inicio: datetime = Field(default_factory=datetime.utcnow)
     nivel_atingido: int = Field(default=1)
-    # PIN de 4 dígitos usado no pareamento com o ESP32 (mesmo conceito do
-    # menuObterPinPareamento() do firmware)
+    # PIN de 4 dígitos que estava pareado quando essa sessão foi criada (auditoria)
     pin_pareamento: str = Field(index=True)
 
     aluno: Optional[Aluno] = Relationship(back_populates="sessoes")
@@ -64,9 +64,21 @@ class Tentativa(SQLModel, table=True):
     distancia_levenshtein: int
     tempo_audio: float  # duração do áudio em segundos
     criado_em: datetime = Field(default_factory=datetime.utcnow)
-    # Caminho/nome do arquivo .wav salvo em disco (ex.: "audios/2024-06-01_123.wav").
-    # Evitar guardar o binário direto no Postgres deixa o banco mais leve;
-    # se quiser guardar o áudio em si, troque para bytes (bytea).
+    # Caminho relativo do .wav salvo em disco (ex.: "audios/sessao3_20260808120000.wav")
     audio: Optional[str] = Field(default=None)
 
     sessao: Optional[Sessao] = Relationship(back_populates="tentativas")
+
+# ---------- Pareamentos (ESP32 <-> Aluno) ----------
+class Pareamento(SQLModel, table=True):
+    __tablename__ = "pareamentos"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    pin: str = Field(index=True)
+    aluno_id: int = Field(foreign_key="alunos.id")
+    # Só existe UM pareamento ativo por PIN por vez. Ao invés de apagar o
+    # histórico, marcamos os antigos como inativos.
+    ativo: bool = Field(default=True)
+    criado_em: datetime = Field(default_factory=datetime.utcnow)
+
+    aluno: Optional[Aluno] = Relationship(back_populates="pareamentos")

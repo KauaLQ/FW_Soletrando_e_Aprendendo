@@ -19,9 +19,9 @@
 // moram na NVS e são gerenciadas pelo módulo wifi_config.
 const char* WIFI_SSID_PADRAO  = "KAUA_LQ";
 const char* WIFI_SENHA_PADRAO = "12345678";
-const char* WS_HOST       = "192.168.1.101"; // IP do PC rodando backend.py
+const char* WS_HOST       = "192.168.1.106"; // IP do PC rodando backend.py
 const uint16_t WS_PORT    = 8080;
-const char* WS_PATH       = "/";
+const char* WS_PATH       = "/ws/esp32";
 
 // ---------- Display OLED ----------
 #define LARGURA_TELA 128 
@@ -344,7 +344,7 @@ void tratarBotaoPalavra() {
         // só permite pedir palavra nova se não estivermos no meio de uma gravação ou já esperando resposta
         else if (estado == AGUARDANDO_PEDIDO_PALAVRA) {
           // Serial.printf("[BOTAO] Pedindo palavra (nivel %d)...\n", nivelAtual);
-          webSocket.sendTXT(("pedir_palavra " + String(nivelAtual)).c_str());
+          webSocket.sendTXT(("pedir_palavra " + String(nivelAtual) + " " + menuObterPinPareamento()).c_str());
           estado = AGUARDANDO_RESPOSTA_PALAVRA;
         } else {
           singleNoteBuzzer(NOTE_C4, 300);
@@ -410,7 +410,7 @@ void tratarBotaoGravar() {
 
           // Debug: mostra a amplitude bruta observada durante a gravação. Descomente caso necessário.
           // Serial.printf("[DIAG] Amplitude bruta (32 bits) observada: min=%ld max=%ld\n", (long)diagMin, (long)diagMax);
-          webSocket.sendTXT("stop_audio");
+          webSocket.sendTXT(("stop_audio " + menuObterPinPareamento()).c_str());
           estado = AGUARDANDO_RESULTADO;
         }
       }

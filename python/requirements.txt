@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+sqlmodel
+python-dotenv
+python-jose[cryptography]
+passlib[bcrypt]
+SpeechRecognition
+pydub
+email-validator
