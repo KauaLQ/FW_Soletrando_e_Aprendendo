@@ -5,7 +5,7 @@ import AuthLayout from "./AuthLayout";
 import TextField from "../../components/ui/TextField";
 import Button from "../../components/ui/Button";
 import { login, registrar } from "../../api/auth";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/useAuth";
 
 export default function AuthPage() {
   // Alternância rápida entre login/registro sem trocar de rota -- mesma

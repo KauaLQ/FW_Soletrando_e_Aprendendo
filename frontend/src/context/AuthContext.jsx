@@ -1,26 +1,17 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useState } from "react";
 
 const CHAVE_TOKEN = "soletrando_token";
 const CHAVE_PROFESSOR = "soletrando_professor";
 
-const AuthContext = createContext(null);
+// eslint-disable-next-line react-refresh/only-export-components
+export const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(null);
-  const [professor, setProfessor] = useState(null);
-  // Evita "piscar" a tela de login antes de checarmos o localStorage
-  const [carregando, setCarregando] = useState(true);
-
-  useEffect(() => {
-    const tokenSalvo = localStorage.getItem(CHAVE_TOKEN);
-    const professorSalvo = localStorage.getItem(CHAVE_PROFESSOR);
-
-    if (tokenSalvo && professorSalvo) {
-      setToken(tokenSalvo);
-      setProfessor(JSON.parse(professorSalvo));
-    }
-    setCarregando(false);
-  }, []);
+  const [token, setToken] = useState(() => localStorage.getItem(CHAVE_TOKEN));
+  const [professor, setProfessor] = useState(() => {
+    const salvo = localStorage.getItem(CHAVE_PROFESSOR);
+    return salvo ? JSON.parse(salvo) : null;
+  });
 
   function entrar(tokenNovo, professorNovo) {
     localStorage.setItem(CHAVE_TOKEN, tokenNovo);
@@ -36,20 +27,6 @@ export function AuthProvider({ children }) {
     setProfessor(null);
   }
 
-  const valor = {
-    token,
-    professor,
-    carregando,
-    autenticado: Boolean(token),
-    entrar,
-    sair,
-  };
-
+  const valor = { token, professor, autenticado: Boolean(token), entrar, sair };
   return <AuthContext.Provider value={valor}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth() {
-  const contexto = useContext(AuthContext);
-  if (!contexto) throw new Error("useAuth precisa estar dentro de um <AuthProvider>");
-  return contexto;
 }

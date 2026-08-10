@@ -7,3 +7,4 @@ passlib[bcrypt]
 SpeechRecognition
 pydub
 email-validator
+psycopg2-binary

@@ -12,9 +12,15 @@ class ProfessorLogin(BaseModel):
     email: EmailStr
     senha: str
 
+class ProfessorResposta(BaseModel):
+    id: int
+    nome: str
+    email: EmailStr
+
 class TokenResposta(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    professor: ProfessorResposta
 
 # ---------- Turmas ----------
 class TurmaCriar(BaseModel):
