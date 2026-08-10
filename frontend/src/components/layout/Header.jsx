@@ -15,24 +15,22 @@ export default function Header() {
   const inicial = professor?.nome?.[0]?.toUpperCase() || "?";
 
   return (
-    <header className="sticky top-0 z-10 bg-paper/95 backdrop-blur border-b border-ink/10">
-      <div className="max-w-5xl mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
+    <header className="sticky top-0 z-30 bg-paper/95 backdrop-blur border-b border-ink/10">
+      <div className="px-4 h-16 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <LetterTile letra="S" indice={0} tamanho="sm" />
-          <span className="font-display text-lg text-ink hidden sm:inline">Soletrando</span>
+          <span className="font-display text-lg text-ink">Soletrando</span>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
             <LetterTile letra={inicial} indice={2} tamanho="sm" />
-            <span className="text-sm text-ink/80 hidden sm:inline max-w-[10rem] truncate">
-              {professor?.nome}
-            </span>
+            <span className="text-sm text-ink/80 max-w-[6rem] truncate">{professor?.nome}</span>
           </div>
           <button
             onClick={aoSair}
             aria-label="Sair da conta"
-            className="p-2 rounded-lg text-ink/50 hover:text-danger hover:bg-danger/10 transition-colors"
+            className="p-2 rounded-lg text-ink/50 hover:text-danger hover:bg-danger/10 transition-colors shrink-0"
           >
             <LogOut size={18} />
           </button>
