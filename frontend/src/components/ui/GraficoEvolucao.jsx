@@ -1,6 +1,6 @@
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
-export default function GraficoEvolucao({ sessoes }) {
+export default function GraficoEvolucao({ sessoes, alunoId }) {
   const dados = sessoes.map((s, i) => {
     const total = s.tentativas.length;
     const acertos = s.tentativas.filter((t) => t.resultado).length;
@@ -11,8 +11,8 @@ export default function GraficoEvolucao({ sessoes }) {
   });
 
   return (
-    <div className="min-h-[180px]">
-      <ResponsiveContainer width="100%" height={180}>
+    <div className="w-full h-[180px] min-w-0">
+      <ResponsiveContainer key={alunoId} width="100%" height="100%">
         <LineChart data={dados} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
           <CartesianGrid stroke="#20253612" vertical={false} />
           <XAxis dataKey="sessao" tick={{ fontSize: 12, fill: "#20253680" }} axisLine={false} tickLine={false} />

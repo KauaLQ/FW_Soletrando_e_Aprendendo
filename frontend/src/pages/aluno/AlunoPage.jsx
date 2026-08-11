@@ -44,10 +44,40 @@ export default function AlunoPage() {
   };
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch de dados ao montar é o padrão recomendado pelo próprio React
-    carregarDados();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [alunoId]);
+    let cancelado = false;
+
+    async function carregar() {
+      setCarregando(true);
+      setErro("");
+      setAluno(null);
+
+      try {
+        const [dadosAluno, pareamento] = await Promise.all([
+          obterAluno(token, alunoId),
+          obterPareamentoAtivo(token, alunoId),
+        ]);
+
+        if (cancelado) return;
+
+        setAluno(dadosAluno);
+        setPinAtivo(pareamento.pin);
+      } catch (err) {
+        if (!cancelado) {
+          setErro(err.message);
+        }
+      } finally {
+        if (!cancelado) {
+          setCarregando(false);
+        }
+      }
+    }
+
+    carregar();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [token, alunoId]);
 
   // Reage em tempo real ao que acontece no dispositivo/backend.
   useDashboardSocket(token, (evento) => {
@@ -116,10 +146,10 @@ export default function AlunoPage() {
             <StatCard label="Tempo médio de soletração" valor={`${aluno.tempo_medio_soletracao.toFixed(1)}s`} />
           </div>
 
-          {sessoesCronologicas.length > 1 && (
+          {sessoesCronologicas.length > 0 && (
             <div className="bg-white border border-ink/10 rounded-2xl p-4 mb-5">
               <h2 className="text-sm font-semibold text-ink/70 mb-3">Evolução por sessão</h2>
-              <GraficoEvolucao key={alunoId} sessoes={sessoesCronologicas} />
+              <GraficoEvolucao key={alunoId} alunoId={alunoId} sessoes={sessoesCronologicas} />
             </div>
           )}
 
