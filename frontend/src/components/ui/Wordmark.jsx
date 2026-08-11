@@ -1,21 +1,24 @@
-import LetterTile from "./LetterTile";
+const ALTURAS = {
+  sm: "h-6",
+  md: "h-9",
+  lg: "h-12",
+};
 
 /**
- * "SOL" em blocos de alfabeto + "etrando" em display type -- usado no painel
- * de marca da tela de login. `sobreFundoEscuro` ajusta a cor do texto solto
- * quando o wordmark aparece sobre o painel escuro (bg-ink).
+ * Logo oficial (ilustração + wordmark) exportada de /public. O arquivo tem
+ * fundo branco opaco, então sobre um painel escuro (AuthLayout) embrulhamos
+ * num cartão claro pra não "flutuar" um retângulo branco cru sobre o ink.
  */
 export default function Wordmark({ tamanho = "md", sobreFundoEscuro = false }) {
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex gap-1">
-        <LetterTile letra="S" indice={0} tamanho={tamanho} className="-rotate-6" />
-        <LetterTile letra="O" indice={1} tamanho={tamanho} className="rotate-3" />
-        <LetterTile letra="L" indice={2} tamanho={tamanho} className="-rotate-3" />
-      </div>
-      <span className={`font-display text-2xl ${sobreFundoEscuro ? "text-paper" : "text-ink"}`}>
-        etrando
-      </span>
-    </div>
+  const imagem = (
+    <img
+      src="/logo-wordmark.png"
+      alt="Soletrando e Aprendendo"
+      className={`${ALTURAS[tamanho]} w-auto object-contain`}
+    />
   );
+
+  if (!sobreFundoEscuro) return imagem;
+
+  return <div className="inline-flex bg-paper rounded-xl px-3 py-2 shadow-sm">{imagem}</div>;
 }

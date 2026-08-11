@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { BookOpen } from "lucide-react";
 import { listarTurmas, criarTurma } from "../../api/turmas";
 import { useAuth } from "../../context/useAuth";
 import TurmaCard from "../../components/ui/TurmaCard";
@@ -46,7 +47,10 @@ export default function DashboardPage() {
 
   return (
     <div className="pb-24">
-      <h1 className="font-display text-2xl text-ink mb-1">Minhas turmas</h1>
+      <h1 className="font-display font-semibold text-2xl text-ink mb-1 flex items-center gap-2">
+        <BookOpen size={22} className="text-marker" />
+        Minhas turmas
+      </h1>
       <p className="text-sm text-ink/60 mb-5">
         {turmas.length > 0
           ? `${turmas.length} ${turmas.length === 1 ? "turma cadastrada" : "turmas cadastradas"}`

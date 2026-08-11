@@ -2,6 +2,7 @@ import { LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/useAuth";
 import LetterTile from "../ui/LetterTile";
+import Wordmark from "../ui/Wordmark";
 
 export default function Header() {
   const { professor, sair } = useAuth();
@@ -17,10 +18,7 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-30 bg-paper/95 backdrop-blur border-b border-ink/10">
       <div className="px-4 h-16 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <LetterTile letra="S" indice={0} tamanho="sm" />
-          <span className="font-display text-lg text-ink">Soletrando</span>
-        </div>
+        <Wordmark tamanho="sm" />
 
         <div className="flex items-center gap-2 shrink-0">
           <div className="flex items-center gap-2 min-w-0">

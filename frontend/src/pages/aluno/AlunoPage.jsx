@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useLocation } from "react-router-dom";
-import { Radio, AlertTriangle } from "lucide-react";
+import { Radio, AlertTriangle, CheckCircle2, XCircle, Target, Timer } from "lucide-react";
 import TopoPagina from "../../components/ui/TopoPagina";
 import StatCard from "../../components/ui/StatCard";
 import Button from "../../components/ui/Button";
@@ -138,12 +138,16 @@ export default function AlunoPage() {
       ) : aluno ? (
         <>
           <div className="flex gap-3 mb-3">
-            <StatCard label="Acertos" valor={aluno.total_acertos} corDestaque="text-marker" />
-            <StatCard label="Erros" valor={aluno.total_erros} corDestaque="text-danger" />
-            <StatCard label="Precisão" valor={`${taxaPrecisao}%`} />
+            <StatCard label="Acertos" valor={aluno.total_acertos} corDestaque="text-marker" icone={CheckCircle2} />
+            <StatCard label="Erros" valor={aluno.total_erros} corDestaque="text-danger" icone={XCircle} />
+            <StatCard label="Precisão" valor={`${taxaPrecisao}%`} icone={Target} />
           </div>
           <div className="mb-5">
-            <StatCard label="Tempo médio de soletração" valor={`${aluno.tempo_medio_soletracao.toFixed(1)}s`} />
+            <StatCard
+              label="Tempo médio de soletração"
+              valor={`${aluno.tempo_medio_soletracao.toFixed(1)}s`}
+              icone={Timer}
+            />
           </div>
 
           {sessoesCronologicas.length > 0 && (
@@ -162,7 +166,7 @@ export default function AlunoPage() {
             {pinAtivo ? `Pareado (PIN ${pinAtivo})` : "Parear com dispositivo ESP32"}
           </Button>
 
-          <h2 className="font-display text-lg text-ink mb-3">Histórico de sessões</h2>
+          <h2 className="font-display font-semibold text-lg text-ink mb-3">Histórico de sessões</h2>
           {aluno.sessoes.length === 0 ? (
             <p className="text-sm text-ink/50 py-6 text-center">Nenhuma sessão registrada ainda.</p>
           ) : (

@@ -8,10 +8,13 @@
  * importante: vira o "containing block" de qualquer elemento `fixed` lá
  * dentro (botão flutuante, modais). Sem isso, um `fixed` prenderia no canto
  * da janela do navegador inteira, e não no canto desse quadro.
+ *
+ * `bg-notebook` aplica uma grade de pontinhos bem sutil no fundo, um
+ * aceno discreto ao tema "caderno escolar" sem comprometer a leitura.
  */
 export default function MobileFrame({ children }) {
   return (
-    <div className="h-dvh w-full bg-paper-dim flex justify-center">
+    <div className="h-dvh w-full bg-paper-dim bg-notebook flex justify-center">
       <div className="relative transform w-full max-w-[430px] h-full bg-paper overflow-y-auto shadow-2xl shadow-ink/10">
         {children}
       </div>

@@ -1,31 +1,38 @@
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap");
 @import "tailwindcss";
 
-/* Tokens de design (Tailwind v4 lê tudo daqui, não existe mais tailwind.config.js) */
+/* Tokens de design (Tailwind v4 lê tudo daqui, não existe mais tailwind.config.js)
+   Paleta extraída da logo oficial do Soletrando e Aprendendo. */
 @theme {
-  --color-ink: #202536;
-  --color-paper: #faf7f0;
-  --color-paper-dim: #f1ece1;
-  --color-marker: #2f9e6e;
-  --color-marker-dark: #237a56;
-  --color-chalk: #f2a73b;
-  --color-chalk-blue: #4c7ea8;
+  --color-ink: #0c2340; /* azul escuro -- headers, textos e elementos primários */
+  --color-paper: #f8fafc; /* fundo neutro, alto contraste de leitura */
+  --color-paper-dim: #edf2f8;
+  --color-marker: #3b5b88; /* azul médio -- botões, bordas e destaques */
+  --color-marker-dark: #24405f;
+  --color-chalk: #9f9bc7; /* roxo/lilás pastel -- destaques secundários e tags */
+  --color-chalk-blue: #8ca8cd; /* azul claro pastel -- cards e detalhes */
   --color-danger: #e0563f;
 
-  --font-display: "Fraunces", serif;
-  --font-sans: "Plus Jakarta Sans", sans-serif;
+  --font-display: "Quicksand", sans-serif;
+  --font-sans: "Inter", sans-serif;
   --font-mono: "IBM Plex Mono", monospace;
 
-  --radius-tile: 10px;
+  --radius-tile: 14px;
 }
 
 body {
-  font-family: "Plus Jakarta Sans", sans-serif;
+  font-family: "Inter", sans-serif;
 }
 
 :focus-visible {
-  outline: 2px solid #2f9e6e;
+  outline: 2px solid #3b5b88;
   outline-offset: 2px;
+}
+
+/* Textura sutil de "caderno" -- reforça o tema educativo sem atrapalhar a leitura */
+.bg-notebook {
+  background-image: radial-gradient(circle, rgba(59, 91, 136, 0.14) 1px, transparent 1px);
+  background-size: 20px 20px;
 }
 
 @keyframes slide-up {

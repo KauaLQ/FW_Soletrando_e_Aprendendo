@@ -7,9 +7,9 @@ import Wordmark from "../../components/ui/Wordmark";
 export default function AuthLayout({ children }) {
   return (
     <div className="min-h-full flex flex-col">
-      <div className="bg-ink px-6 pt-10 pb-8 rounded-b-[2rem]">
+      <div className="bg-gradient-to-br from-ink via-ink to-marker-dark px-6 pt-10 pb-9 rounded-b-[2rem] shadow-lg shadow-ink/20">
         <Wordmark tamanho="lg" sobreFundoEscuro />
-        <p className="mt-3 text-paper/70 text-sm">
+        <p className="mt-4 text-paper/70 text-sm leading-relaxed">
           Acompanhe a jornada de soletração de cada aluno, palavra por palavra.
         </p>
       </div>

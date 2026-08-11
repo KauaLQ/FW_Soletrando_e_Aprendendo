@@ -5,7 +5,7 @@ export default function TurmaCard({ turma, indice = 0, onClick }) {
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-center gap-3 bg-white border border-ink/10 rounded-2xl p-4 text-left hover:border-marker/40 active:scale-[0.99] transition"
+      className="w-full flex items-center gap-3 bg-white border border-ink/10 rounded-2xl p-4 text-left hover:border-marker/40 hover:shadow-md hover:shadow-ink/5 active:scale-[0.99] transition"
     >
       <LetterTile
         letra={turma.nome?.[0]?.toUpperCase() || "T"}
@@ -15,7 +15,7 @@ export default function TurmaCard({ turma, indice = 0, onClick }) {
       />
 
       <div className="flex-1 min-w-0">
-        <h3 className="font-display text-lg text-ink truncate">{turma.nome}</h3>
+        <h3 className="font-display font-semibold text-lg text-ink truncate">{turma.nome}</h3>
         <p className="text-xs text-ink/50 mb-2">Ano letivo {turma.ano_letivo}</p>
         <div className="flex items-center gap-3 text-xs text-ink/60">
           <span className="flex items-center gap-1" title="Alunos">
