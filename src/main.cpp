@@ -19,7 +19,7 @@
 // moram na NVS e são gerenciadas pelo módulo wifi_config.
 const char* WIFI_SSID_PADRAO  = "KAUA_LQ";
 const char* WIFI_SENHA_PADRAO = "12345678";
-const char* WS_HOST       = "192.168.1.106"; // IP do PC rodando backend.py
+const char* WS_HOST       = "192.168.1.105"; // IP do PC rodando backend.py
 const uint16_t WS_PORT    = 8080;
 const char* WS_PATH       = "/ws/esp32";
 

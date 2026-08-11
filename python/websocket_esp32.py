@@ -8,6 +8,7 @@ from database import engine
 from models import Aluno, Sessao, Tentativa, Pareamento
 from asr import normalize_string, levenshtein, transcrever_fala, carregar_palavras
 from config import AUDIO_DIR
+from dashboard_ws import gerenciador
 
 router = APIRouter()
 
@@ -138,6 +139,7 @@ async def websocket_esp32(websocket: WebSocket):
                         aluno = _resolver_aluno_pareado(db, pin_atual)
                         if aluno is None or sessao_atual_id is None:
                             print(f"[PAREAMENTO] PIN '{pin_atual}' sem pareamento ativo -- tentativa descartada")
+                            await gerenciador.transmitir({"tipo": "pin_incorreto", "pin": pin_atual})
                         else:
                             audio_salvo = _salvar_audio_permanente(caminho_voz, sessao_atual_id)
                             tentativa = Tentativa(
@@ -155,6 +157,12 @@ async def websocket_esp32(websocket: WebSocket):
                                 sessao_db.nivel_atingido = nivel_atual
                                 db.add(sessao_db)
                             db.commit()
+
+                            await gerenciador.transmitir({
+                                "tipo": "nova_tentativa",
+                                "aluno_id": aluno.id,
+                                "sessao_id": sessao_atual_id,
+                            })
 
             # ---------- 2. Mensagens binárias (chunks de áudio PCM da ESP32) ----------
             dados_binarios = mensagem.get("bytes")

@@ -1,9 +1,11 @@
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 from database import obter_sessao
 from models import Professor, Aluno, Turma, Sessao, Tentativa, Pareamento
-from schemas import AlunoDetalhe, SessaoResposta, TentativaResposta, PareamentoCriar
+from schemas import AlunoDetalhe, SessaoResposta, TentativaResposta, PareamentoCriar, PareamentoStatus
 from auth import obter_professor_atual
+from dashboard_ws import gerenciador
 
 router = APIRouter(prefix="/alunos", tags=["Alunos"])
 
@@ -60,18 +62,28 @@ def obter_aluno(
         sessoes=sessoes_resposta,
     )
 
+# ---------- Pareamento ----------
+@router.get("/{aluno_id}/parear", response_model=PareamentoStatus)
+def obter_pareamento_ativo(
+    aluno_id: int,
+    sessao: Session = Depends(obter_sessao),
+    professor: Professor = Depends(obter_professor_atual),
+):
+    """Consultado ao abrir a página do aluno, pra restaurar o PIN ativo mesmo
+    depois de um F5 (o pareamento é persistido no banco, não no navegador)."""
+    _obter_aluno_do_professor(aluno_id, sessao, professor)
+    ativo = sessao.exec(
+        select(Pareamento).where(Pareamento.aluno_id == aluno_id, Pareamento.ativo == True)  # noqa: E712
+    ).first()
+    return PareamentoStatus(pin=ativo.pin if ativo else None)
+
 @router.post("/{aluno_id}/parear")
-def parear_aluno(
+async def parear_aluno(
     aluno_id: int,
     dados: PareamentoCriar,
     sessao: Session = Depends(obter_sessao),
     professor: Professor = Depends(obter_professor_atual),
 ):
-    """
-    Chamado pelo modal 'Parear Sessão' do frontend. Vincula o PIN atual do
-    hardware a este aluno. Qualquer pareamento antigo usando o mesmo PIN é
-    desativado (só pode existir 1 pareamento ativo por PIN).
-    """
     _obter_aluno_do_professor(aluno_id, sessao, professor)
 
     antigos = sessao.exec(
@@ -84,15 +96,18 @@ def parear_aluno(
     novo = Pareamento(pin=dados.pin, aluno_id=aluno_id, ativo=True)
     sessao.add(novo)
     sessao.commit()
+
+    await gerenciador.transmitir({
+        "tipo": "pareamento_alterado", "aluno_id": aluno_id, "pin": dados.pin,
+    })
     return {"ok": True, "pin": dados.pin, "aluno_id": aluno_id}
 
 @router.delete("/{aluno_id}/parear")
-def desparear_aluno(
+async def desparear_aluno(
     aluno_id: int,
     sessao: Session = Depends(obter_sessao),
     professor: Professor = Depends(obter_professor_atual),
 ):
-    """Encerra manualmente o pareamento ativo desse aluno (fim de ciclo de vida)."""
     _obter_aluno_do_professor(aluno_id, sessao, professor)
     ativos = sessao.exec(
         select(Pareamento).where(Pareamento.aluno_id == aluno_id, Pareamento.ativo == True)  # noqa: E712
@@ -101,4 +116,8 @@ def desparear_aluno(
         p.ativo = False
         sessao.add(p)
     sessao.commit()
+
+    await gerenciador.transmitir({
+        "tipo": "pareamento_alterado", "aluno_id": aluno_id, "pin": None,
+    })
     return {"ok": True}

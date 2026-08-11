@@ -72,3 +72,6 @@ class AlunoDetalhe(BaseModel):
 # ---------- Pareamento ----------
 class PareamentoCriar(BaseModel):
     pin: str = Field(min_length=4, max_length=4)
+
+class PareamentoStatus(BaseModel):
+    pin: Optional[str] = None
