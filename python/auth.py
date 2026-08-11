@@ -1,6 +1,6 @@
 import os
 import bcrypt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
@@ -29,7 +29,7 @@ def verificar_senha(senha: str, senha_hash: str) -> bool:
     return bcrypt.checkpw(senha.encode('utf-8'), senha_hash.encode('utf-8'))
 
 def criar_token(professor_id: int) -> str:
-    expira = datetime.utcnow() + timedelta(minutes=EXPIRA_MINUTOS)
+    expira = datetime.now(timezone.utc) + timedelta(minutes=EXPIRA_MINUTOS)
     payload = {"sub": str(professor_id), "exp": expira}
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 

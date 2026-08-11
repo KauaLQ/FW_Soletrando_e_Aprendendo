@@ -1,7 +1,7 @@
 import os
 import random
 import wave
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlmodel import Session, select
 from database import engine
@@ -28,7 +28,7 @@ def _resolver_aluno_pareado(db: Session, pin: str):
 
 def _salvar_audio_permanente(caminho_origem: str, sessao_id: int) -> str:
     """Copia o voz.wav temporário para /audios, com nome único (sessão + timestamp)."""
-    nome_arquivo = f"sessao{sessao_id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}.wav"
+    nome_arquivo = f"sessao{sessao_id}_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}.wav"
     destino = os.path.join(AUDIO_DIR, nome_arquivo)
     with open(caminho_origem, "rb") as origem, open(destino, "wb") as dest:
         dest.write(origem.read())
