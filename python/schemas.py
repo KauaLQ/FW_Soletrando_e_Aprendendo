@@ -75,3 +75,41 @@ class PareamentoCriar(BaseModel):
 
 class PareamentoStatus(BaseModel):
     pin: Optional[str] = None
+
+# ---------- Relatório de IA pedagógica ----------
+class ExemploErro(BaseModel):
+    palavra_esperada: str
+    transcrito: str
+
+class PadraoIdentificado(BaseModel):
+    tipo: str
+    descricao: str
+    exemplos: List[ExemploErro]
+    frequencia: int
+
+class PalavraRecomendada(BaseModel):
+    palavra: str
+    motivo: str
+
+class MetodologiaSugerida(BaseModel):
+    nome: str
+    descricao: str
+    como_aplicar: str
+
+class ResumoDesempenho(BaseModel):
+    total_tentativas: int
+    total_acertos: int
+    total_erros: int
+    taxa_acerto: float
+
+class RelatorioIA(BaseModel):
+    resumo_desempenho: ResumoDesempenho
+    padroes_identificados: List[PadraoIdentificado]
+    palavras_recomendadas: List[PalavraRecomendada]
+    metodologias_sugeridas: List[MetodologiaSugerida]
+    observacoes_gerais: str
+
+class RelatorioIAResposta(BaseModel):
+    relatorio: RelatorioIA
+    gerado_em: datetime
+    do_cache: bool

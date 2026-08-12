@@ -18,7 +18,6 @@ class Professor(SQLModel, table=True):
 
     turmas: List["Turma"] = Relationship(back_populates="professor")
 
-# ---------- Turmas ----------
 class Turma(SQLModel, table=True):
     __tablename__ = "turmas"
 
@@ -26,6 +25,10 @@ class Turma(SQLModel, table=True):
     nome: str
     ano_letivo: int
     professor_id: int = Field(foreign_key="professores.id")
+
+    relatorio_ia: Optional[str] = Field(default=None)
+    relatorio_ia_gerado_em: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    relatorio_ia_total_tentativas: Optional[int] = Field(default=None)
 
     professor: Optional[Professor] = Relationship(back_populates="turmas")
     alunos: List["Aluno"] = Relationship(back_populates="turma")
@@ -37,6 +40,12 @@ class Aluno(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     nome: str
     turma_id: int = Field(foreign_key="turmas.id")
+
+    # Cache do último relatório de IA gerado. evita chamar a API de novo
+    # sem necessidade e economiza a cota gratuita.
+    relatorio_ia: Optional[str] = Field(default=None)
+    relatorio_ia_gerado_em: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    relatorio_ia_total_tentativas: Optional[int] = Field(default=None)
 
     turma: Optional[Turma] = Relationship(back_populates="alunos")
     sessoes: List["Sessao"] = Relationship(back_populates="aluno")

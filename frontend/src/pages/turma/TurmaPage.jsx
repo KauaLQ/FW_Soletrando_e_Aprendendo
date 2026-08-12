@@ -6,6 +6,7 @@ import TopoPagina from "../../components/ui/TopoPagina";
 import AlunoRow from "../../components/ui/AlunoRow";
 import BotaoFlutuante from "../../components/ui/BotaoFlutuante";
 import ModalNovoAluno from "./ModalNovoAluno";
+import AnalisadorPedagogico from "../../components/ia/AnalisadorPedagogico";
 
 export default function TurmaPage() {
   const { turmaId } = useParams();
@@ -68,6 +69,8 @@ export default function TurmaPage() {
       {erro && (
         <div className="mb-4 rounded-lg bg-danger/10 px-3.5 py-2.5 text-sm text-danger">{erro}</div>
       )}
+
+      <AnalisadorPedagogico tipo="turma" id={turmaId} />
 
       {carregando ? (
         <div className="flex justify-center py-10">

@@ -10,6 +10,7 @@ import ModalParear from "./ModalParear";
 import { obterAluno, obterPareamentoAtivo, parearAluno, despararAluno } from "../../api/alunos";
 import { useAuth } from "../../context/useAuth";
 import { useDashboardSocket } from "../../hooks/useDashboardSocket";
+import AnalisadorPedagogico from "../../components/ia/AnalisadorPedagogico";
 
 export default function AlunoPage() {
   const { alunoId } = useParams();
@@ -130,6 +131,8 @@ export default function AlunoPage() {
           </span>
         </div>
       )}
+
+      <AnalisadorPedagogico tipo="aluno" id={alunoId} />
 
       {carregando ? (
         <div className="flex justify-center py-10">

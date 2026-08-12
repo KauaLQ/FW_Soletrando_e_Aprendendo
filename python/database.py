@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 from sqlmodel import SQLModel, Session, create_engine
+from sqlalchemy import text
 # import necessário para o SQLModel "enxergar" todas as tabelas antes de criar
 import models  # noqa: F401
 
@@ -18,6 +19,26 @@ if not DB_URL:
     raise ValueError(f"A variável DB_URL não foi encontrada. Verifique se o arquivo existe em: {ENV_PATH}")
 
 engine = create_engine(DB_URL, echo=False)
+
+def aplicar_migracoes_simples():
+    """Adiciona colunas novas em tabelas já existentes (sem Alembic).
+    Tenta cada ALTER TABLE e ignora o erro se a coluna já existir --
+    funciona tanto em SQLite quanto em Postgres."""
+    comandos = [
+        "ALTER TABLE alunos ADD COLUMN relatorio_ia TEXT",
+        "ALTER TABLE alunos ADD COLUMN relatorio_ia_gerado_em TIMESTAMP",
+        "ALTER TABLE alunos ADD COLUMN relatorio_ia_total_tentativas INTEGER",
+        "ALTER TABLE turmas ADD COLUMN relatorio_ia TEXT",
+        "ALTER TABLE turmas ADD COLUMN relatorio_ia_gerado_em TIMESTAMP",
+        "ALTER TABLE turmas ADD COLUMN relatorio_ia_total_tentativas INTEGER",
+    ]
+    with engine.connect() as conexao:
+        for comando in comandos:
+            try:
+                conexao.execute(text(comando))
+                conexao.commit()
+            except Exception:
+                conexao.rollback()  # coluna já existe
 
 def criar_tabelas():
     """Cria todas as tabelas que ainda não existem no banco."""

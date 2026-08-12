@@ -2,9 +2,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from database import criar_tabelas
+from database import criar_tabelas, aplicar_migracoes_simples
 from config import AUDIO_DIR
-from routers import auth_router, turmas, alunos
+from routers import auth_router, turmas, alunos, relatorio_ia
 from websocket_esp32 import router as esp32_router
 from dashboard_ws import router as dashboard_router
 
@@ -22,6 +22,7 @@ app.add_middleware(
 app.include_router(auth_router.router)
 app.include_router(turmas.router)
 app.include_router(alunos.router)
+app.include_router(relatorio_ia.router) # Rotas de relatório da IA (aluno individual e turma)
 
 # ---------- WebSocket da ESP32 (mesma porta, path novo: /ws/esp32) ----------
 app.include_router(esp32_router)
@@ -33,6 +34,7 @@ app.mount("/audios", StaticFiles(directory=str(AUDIO_DIR)), name="audios")
 @app.on_event("startup")
 def ao_iniciar():
     criar_tabelas()
+    aplicar_migracoes_simples()
 
 @app.get("/")
 def status():
