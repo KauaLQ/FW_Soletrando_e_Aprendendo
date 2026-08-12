@@ -12,7 +12,11 @@ if not API_KEY:
     raise ValueError("GEMINI_API_KEY não encontrada. Verifique o .env")
 
 cliente = genai.Client(api_key=API_KEY)
-MODELO = "gemini-2.0-flash"
+
+# Configurável via .env para não depender de alterar código quando o
+# Google aposentar o modelo de novo. Modelos disponíveis e prazos de desativação em:
+# https://ai.google.dev/gemini-api/docs/deprecations
+MODELO = os.getenv("GEMINI_MODEL")
 
 def montar_prompt(tentativas: list[dict], nome_referencia: str, tipo_analise: str) -> str:
     """Monta o prompt com o papel do agente e os dados coletados do banco."""
@@ -35,6 +39,10 @@ Tarefas:
 1. Identifique padrões de erro fonético ou ortográfico recorrentes (troca de
    letras com som parecido, omissão de vogais, confusão CH/X, inversão de
    letras, etc). Ignore erros isolados sem repetição de padrão.
+   IMPORTANTE: o campo "tipo" de cada padrão deve ser SEMPRE exatamente
+   "fonetico" ou "ortografico" (sem acento, minúsculo) — o nome específico
+   do padrão (ex: "Substituição de consoantes por proximidade fonética")
+   vai no campo "descricao", nunca no "tipo".
 2. Calcule o resumo de desempenho (total de tentativas, acertos, erros, taxa
    de acerto em %).
 3. Sugira de 5 a 10 palavras novas para fixação, coerentes com o nível/faixa

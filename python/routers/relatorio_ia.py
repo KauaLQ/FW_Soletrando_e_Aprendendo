@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,8 +15,18 @@ router = APIRouter(tags=["Relatório IA"])
 
 MINIMO_TENTATIVAS = 5
 
+logger = logging.getLogger("relatorio_ia")
+
 def _agora_utc():
     return datetime.now(timezone.utc)
+
+def _relatorio_do_cache(json_bruto: str) -> Optional[RelatorioIA]:
+    """Se o cache foi salvo com um schema antigo, a validação falha,
+    tratamos como cache inexistente pra forçar uma nova geração."""
+    try:
+        return RelatorioIA.model_validate_json(json_bruto)
+    except Exception:
+        return None
 
 def _tentativas_para_dict(tentativas: list[Tentativa]) -> list[dict]:
     return [
@@ -28,11 +39,10 @@ def _tentativas_para_dict(tentativas: list[Tentativa]) -> list[dict]:
     ]
 
 def _chamar_ia_com_seguranca(tentativas, nome, tipo) -> RelatorioIA:
-    """A cota gratuita do Gemini pode falhar por limite de taxa
-    convertemos qualquer erro do SDK numa mensagem amigável pro professor."""
     try:
         return gerar_relatorio(tentativas, nome, tipo)
-    except Exception:
+    except Exception as e:
+        logger.error(f"Falha ao gerar relatório de IA ({tipo} '{nome}'): {e!r}")
         raise HTTPException(
             status_code=503,
             detail="Não foi possível gerar a análise agora (serviço de IA indisponível ou "
@@ -52,13 +62,17 @@ def obter_relatorio_aluno(
     sessao: Session = Depends(obter_sessao),
     professor: Professor = Depends(obter_professor_atual),
 ):
-    """Consultado ao abrir a página, pra restaurar um relatório já gerado
-    antes sem precisar chamar a IA de novo."""
     aluno = _obter_aluno_do_professor(aluno_id, sessao, professor)
     if not aluno.relatorio_ia:
         return None
+    
+    # Valida se o cache é válido
+    relatorio = _relatorio_do_cache(aluno.relatorio_ia)
+    if not relatorio:
+        return None  # Se o cache estiver corrompido/antigo, retorna None pra o frontend pedir nova geração
+        
     return RelatorioIAResposta(
-        relatorio=RelatorioIA.model_validate_json(aluno.relatorio_ia),
+        relatorio=relatorio,
         gerado_em=aluno.relatorio_ia_gerado_em,
         do_cache=True,
     )
@@ -81,14 +95,17 @@ def gerar_relatorio_aluno(
 
     total_atual = len(tentativas)
 
-    # Só chama a IA se houver tentativas novas desde a última geração salva.
+    # Só reaproveita o cache se o número de tentativas não mudou E o cache for válido
     if aluno.relatorio_ia and aluno.relatorio_ia_total_tentativas == total_atual:
-        return RelatorioIAResposta(
-            relatorio=RelatorioIA.model_validate_json(aluno.relatorio_ia),
-            gerado_em=aluno.relatorio_ia_gerado_em,
-            do_cache=True,
-        )
+        relatorio_cached = _relatorio_do_cache(aluno.relatorio_ia)
+        if relatorio_cached:
+            return RelatorioIAResposta(
+                relatorio=relatorio_cached,
+                gerado_em=aluno.relatorio_ia_gerado_em,
+                do_cache=True,
+            )
 
+    # Se não houver cache válido, chama a IA para regerar
     relatorio = _chamar_ia_com_seguranca(_tentativas_para_dict(tentativas), aluno.nome, "aluno individual")
 
     aluno.relatorio_ia = relatorio.model_dump_json()
@@ -118,8 +135,14 @@ def obter_relatorio_turma(
     turma = _obter_turma_do_professor(turma_id, sessao, professor)
     if not turma.relatorio_ia:
         return None
+    
+    # Valida se o cache é válido
+    relatorio = _relatorio_do_cache(turma.relatorio_ia)
+    if not relatorio:
+        return None  # Se o cache estiver corrompido/antigo, retorna None
+        
     return RelatorioIAResposta(
-        relatorio=RelatorioIA.model_validate_json(turma.relatorio_ia),
+        relatorio=relatorio,
         gerado_em=turma.relatorio_ia_gerado_em,
         do_cache=True,
     )
@@ -142,13 +165,17 @@ def gerar_relatorio_turma(
 
     total_atual = len(tentativas)
 
+    # Só reaproveita o cache se o número de tentativas não mudou E o cache for válido
     if turma.relatorio_ia and turma.relatorio_ia_total_tentativas == total_atual:
-        return RelatorioIAResposta(
-            relatorio=RelatorioIA.model_validate_json(turma.relatorio_ia),
-            gerado_em=turma.relatorio_ia_gerado_em,
-            do_cache=True,
-        )
+        relatorio_cached = _relatorio_do_cache(turma.relatorio_ia)
+        if relatorio_cached:
+            return RelatorioIAResposta(
+                relatorio=relatorio_cached,
+                gerado_em=turma.relatorio_ia_gerado_em,
+                do_cache=True,
+            )
 
+    # Se não houver cache válido, chama a IA para regerar
     relatorio = _chamar_ia_com_seguranca(_tentativas_para_dict(tentativas), turma.nome, "turma inteira")
 
     turma.relatorio_ia = relatorio.model_dump_json()

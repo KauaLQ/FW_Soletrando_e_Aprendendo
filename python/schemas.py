@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Literal
 from pydantic import BaseModel, EmailStr, Field
 
 # ---------- Autenticação ----------
@@ -82,7 +82,7 @@ class ExemploErro(BaseModel):
     transcrito: str
 
 class PadraoIdentificado(BaseModel):
-    tipo: str
+    tipo: Literal["fonetico", "ortografico"]
     descricao: str
     exemplos: List[ExemploErro]
     frequencia: int

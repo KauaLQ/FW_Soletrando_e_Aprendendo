@@ -115,29 +115,31 @@ export default function AnalisadorPedagogico({ tipo, id }) {
             ) : (
               <div className="space-y-2.5">
                 {relatorio.padroes_identificados.map((padrao, i) => {
-                  const Icone = ICONE_TIPO[padrao.tipo] || SpellCheck;
-                  return (
+                const Icone = ICONE_TIPO[padrao.tipo] || SpellCheck;
+                return (
                     <div key={i} className="bg-paper-dim rounded-xl p-3.5">
-                      <div className="flex items-center justify-between gap-2 mb-1.5">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Icone size={16} className="text-marker shrink-0" />
-                          <span className="text-sm font-semibold text-ink truncate">{padrao.descricao}</span>
-                        </div>
-                        <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-chalk/25 text-ink/70">
-                          {LABEL_TIPO[padrao.tipo] || padrao.tipo} · {padrao.frequencia}x
+                    <div className="flex items-start gap-2 mb-1.5">
+                        <Icone size={16} className="text-marker shrink-0 mt-0.5" />
+                        <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-ink leading-snug">
+                            {padrao.descricao}
+                        </p>
+                        <span className="inline-block max-w-full truncate align-top mt-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-chalk/25 text-ink/70">
+                            {LABEL_TIPO[padrao.tipo] || padrao.tipo} · {padrao.frequencia}x
                         </span>
-                      </div>
-                      {padrao.exemplos.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 mt-2">
-                          {padrao.exemplos.map((ex, j) => (
-                            <span key={j} className="text-xs font-mono bg-white border border-ink/10 rounded-md px-2 py-1 text-ink/70">
-                              {ex.palavra_esperada} → {ex.transcrito}
-                            </span>
-                          ))}
                         </div>
-                      )}
                     </div>
-                  );
+                    {padrao.exemplos.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                        {padrao.exemplos.map((ex, j) => (
+                            <span key={j} className="text-xs font-mono bg-white border border-ink/10 rounded-md px-2 py-1 text-ink/70">
+                            {ex.palavra_esperada} → {ex.transcrito}
+                            </span>
+                        ))}
+                        </div>
+                    )}
+                    </div>
+                );
                 })}
               </div>
             )}
